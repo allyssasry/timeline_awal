@@ -7,6 +7,11 @@
     <title>Dashboard DIG</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script src="https://cdn.tailwindcss.com"></script>
+      <style>
+    /* Cegah “geser ke kanan” saat scrollbar muncul/hilang */
+    html { scrollbar-gutter: stable; }           /* Chrome/Edge/Firefox modern */
+    body { overflow-x: hidden; }                 /* Antisipasi overflow horizontal */
+  </style>
 </head>
 
 <body class="min-h-screen bg-[#F8ECEC] text-gray-900">
@@ -263,6 +268,15 @@
                             </button>
                         </div>
 
+                          
+                            <div class="mt-4 flex justify-end">
+                                <a href="{{ route('dig.projects.show', $project->id) }}"
+                                    class="inline-flex items-center gap-2 rounded-lg border border-[#7A1C1C] px-3 py-1.5 text-xs font-semibold text-[#7A1C1C] bg-white hover:bg-[#FFF2F2]">
+                                    Detail Informasi
+                                </a>
+                            </div>
+                        </div>
+
                         {{-- FORM (Hidden) --}}
                         <div id="progressForm-{{ $project->id }}"
                             class="hidden mt-4 rounded-xl bg-white p-4 border border-[#E7C9C9]">
@@ -291,6 +305,7 @@
                         </div>
 
                     </div>
+                  
                 @endforeach
             </div>
         @endif

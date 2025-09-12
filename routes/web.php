@@ -7,6 +7,8 @@ use App\Http\Controllers\ProgressController;
 use App\Http\Controllers\ProgressUpdateController;
 // routes/web.php
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ProgressNoteController;
+
 
 
 
@@ -37,6 +39,27 @@ Route::middleware('auth')->group(function () {
     Route::post('/progresses/{progress}/updates', [ProgressUpdateController::class, 'store'])
         ->name('progresses.updates.store');
 });
+
+
+Route::get('/dig/projects/{project}', [ProjectController::class, 'show'])
+    ->name('dig.projects.show');
+
+
+Route::post('/progresses/{progress}/confirm', [ProgressUpdateController::class, 'confirm'])
+    ->name('progresses.confirm');
+
+Route::post('/progresses/{progress}/updates', [ProgressUpdateController::class, 'storeUpdate'])
+    ->name('progresses.updates.store');
+
+Route::post('/progresses/{progress}/notes', [ProgressUpdateController::class, 'storeNote'])
+    ->name('progresses.notes.store');
+
+
+Route::prefix('dig')->name('dig.')->group(function () {
+    Route::get('/projects/{project}', [ProjectController::class, 'show'])
+         ->name('projects.show');
+});
+
 
 // Project & Progress
 Route::resource('projects', ProjectController::class);

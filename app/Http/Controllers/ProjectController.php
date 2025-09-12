@@ -79,34 +79,13 @@ class ProjectController extends Controller
     }
 
     /**
-     * Tampilkan dashboard dengan panel detail project tertentu terbuka.
-     * (opsional; jika kamu pakai show di rute tertentu)
+     * Detail project (halaman terpisah).
      */
     public function show(Project $project)
     {
-        // Detail lengkap project terpilih
-        $project->load([
-            'creator:id,name,username',
-            'digitalBanking:id,name,username',
-            'developer:id,name,username',
-            'progresses' => fn ($q) => $q->with(['updates' => fn ($uq) => $uq->latest()]),
-        ]);
+        // load relasi agar detail lengkap
+        $project->load(['progresses.updates', 'digitalBanking', 'developer', 'creator']);
 
-        // Daftar project untuk list kiri/atas
-        $projects = Project::with([
-                'digitalBanking:id,name,username',
-                'developer:id,name,username',
-                'progresses' => fn ($q) => $q->with(['updates' => fn ($uq) => $uq->latest()]),
-            ])
-            ->withCount('progresses')
-            ->latest()
-            ->get();
-
-        // Dropdown modal juga disediakan
-        $digitalUsers = User::where('role', 'digital_banking')->orderBy('name')->get(['id','name','username']);
-        $itUsers      = User::where('role', 'it')->orderBy('name')->get(['id','name','username']);
-
-        return view('dig.dashboard', compact('projects','project','digitalUsers','itUsers'))
-            ->with('openProjectDetail', true);
+        return view('dig.detail', compact('project'));
     }
 }

@@ -24,4 +24,20 @@ class ProgressController extends Controller
 
         return back()->with('success','Progress berhasil ditambahkan.');
     }
+     public function confirm(Progress $progress)
+    {
+        if ($progress->confirmed_at) {
+            return back()->with('success', 'Project sudah dikonfirmasi sebelumnya.');
+        }
+
+        // Boleh konfirmasi kalau update terbaru >= target
+        $latest = optional($progress->updates()->orderByDesc('update_date')->first())->percent ?? 0;
+        if ($latest < (int)$progress->desired_percent) {
+            return back()->withErrors(['Konfirmasi gagal: realisasi belum mencapai target.']);
+        }
+
+        $progress->forceFill(['confirmed_at' => now()])->save();
+
+        return back()->with('success', 'Project selesai dikonfirmasi.');
+    }
 }
