@@ -14,6 +14,7 @@ class Progress extends Model
         'start_date',
         'end_date',
         'desired_percent',
+        'confirmed_at'
     ];
 
     protected $casts = [

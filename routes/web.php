@@ -31,13 +31,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/dig/dashboard', [ProjectController::class, 'index'])->name('projects.index');
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
 
-    // Tambah progress ke project yang sudah ada
-    Route::post('/projects/{project}/progresses', [ProgressController::class, 'store'])
-        ->name('projects.progresses.store');
-
-    // Update harian progress (percent + note + date)
-    Route::post('/progresses/{progress}/updates', [ProgressUpdateController::class, 'store'])
-        ->name('progresses.updates.store');
 });
 
 

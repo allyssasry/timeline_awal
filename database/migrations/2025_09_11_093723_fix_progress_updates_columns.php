@@ -61,5 +61,7 @@ return new class extends Migration {
         Schema::table('progress_updates', function (Blueprint $table) {
             $table->dropColumn('percent');
         });
+
     }
+    
 };

@@ -1,13 +1,12 @@
 {{-- resources/views/dig/dashboard.blade.php --}}
 <!doctype html>
 <html lang="id">
-
 <head>
-    <meta charset="utf-8">
-    <title>Dashboard DIG</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script src="https://cdn.tailwindcss.com"></script>
-      <style>
+  <meta charset="utf-8">
+  <title>Dashboard DIG</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
     /* Cegah “geser ke kanan” saat scrollbar muncul/hilang */
     html { scrollbar-gutter: stable; }           /* Chrome/Edge/Firefox modern */
     body { overflow-x: hidden; }                 /* Antisipasi overflow horizontal */
@@ -15,19 +14,16 @@
 </head>
 
 <body class="min-h-screen bg-[#F8ECEC] text-gray-900">
-
-    {{-- NAVBAR --}}
-    <header class="sticky top-0 z-30 bg-[#F8ECEC]/90 backdrop-blur border-b">
-        <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <img src="https://website-api.bankdki.co.id/integrations/storage/page-meta-data/007UlZbO3Oe6PivLltdFiQax6QH5kWDvb0cKPdn4.png"
-                    class="h-8" alt="Bank Jakarta" />
-            </div>
-        </div>
-    </header>
+  {{-- NAVBAR --}}
+  <header class="sticky top-0 z-30 bg-[#F8ECEC]/90 backdrop-blur border-b">
+    <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <img src="https://website-api.bankdki.co.id/integrations/storage/page-meta-data/007UlZbO3Oe6PivLltdFiQax6QH5kWDvb0cKPdn4.png" class="h-8" alt="Bank Jakarta" />
+      </div>
+    </div>
+  </header>
 
   <div class="max-w-6xl mx-auto px-5 py-6">
-
     {{-- BARIS JUDUL/AKSI --}}
     <div class="flex items-center justify-between">
       <h1 class="text-[15px] md:text-[16px] font-semibold text-[#7A1C1C]">Dalam Proses</h1>
@@ -67,14 +63,41 @@
 
       {{-- CTA TAMBAH PROGRESS --}}
       <div class="flex justify-end">
-        <button type="button"
-                class="inline-flex items-center gap-2 rounded-[12px] px-4 py-2 text-white text-[13px] font-semibold bg-[#7A1C1C] shadow">
+        <button type="button" id="btnToggleProgressForm"
+                class="inline-flex items-center gap-2 rounded-[12px] px-4 py-2 text-white text-[13px] font-semibold bg-[#7A1C1C] shadow"
+                data-target="progressForm-{{ $project->id }}">
           <span class="grid place-content-center w-6 h-6 rounded-full bg-white/20">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
           </span>
           Tambah Progress
         </button>
       </div>
+    </div>
+
+    {{-- FORM TAMBAH PROGRESS (HIDDEN) --}}
+    <div id="progressForm-{{ $project->id }}"
+         class="hidden mt-3 rounded-xl bg-white p-4 border border-[#E7C9C9]">
+      <div class="font-semibold mb-2">Tambah Progress untuk Project ini</div>
+      <form method="POST" action="{{ route('projects.progresses.store', $project->id) }}"
+            class="grid grid-cols-1 md:grid-cols-5 gap-2">
+        @csrf
+        <input name="name" required placeholder="Nama Progress"
+               class="rounded-xl bg-[#E2B9B9]/40 border border-[#C89898] px-3 py-2 outline-none md:col-span-2">
+        <input type="date" name="start_date" required
+               class="rounded-xl bg-[#E2B9B9]/40 border border-[#C89898] px-3 py-2 outline-none">
+        <input type="date" name="end_date" required
+               class="rounded-xl bg-[#E2B9B9]/40 border border-[#C89898] px-3 py-2 outline-none">
+        <select name="desired_percent" required
+                class="rounded-xl bg-[#E2B9B9]/40 border border-[#C89898] px-3 py-2 outline-none">
+          @for ($i = 0; $i <= 100; $i += 5)
+            <option value="{{ $i }}">{{ $i }}%</option>
+          @endfor
+        </select>
+        <button
+          class="rounded-xl border-2 border-[#7A1C1C] bg-[#E2B9B9] px-4 py-2 font-semibold hover:bg-[#D9AFAF]">
+          Tambah
+        </button>
+      </form>
     </div>
 
     {{-- KARTU PROGRESS --}}
@@ -190,5 +213,14 @@
       @endforelse
     </div>
   </div>
+
+  {{-- Toggle script untuk form Tambah Progress --}}
+  <script>
+    const btn = document.getElementById('btnToggleProgressForm');
+    btn?.addEventListener('click', () => {
+      const id = btn.getAttribute('data-target');
+      document.getElementById(id)?.classList.toggle('hidden');
+    });
+  </script>
 </body>
 </html>
