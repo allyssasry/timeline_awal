@@ -56,8 +56,8 @@
 
             <nav class="hidden md:flex items-center gap-6 text-sm">
                 <a href="#beranda" class="font-semibold">Beranda</a>
-                <a href="#" class="text-gray-600 hover:text-red-600">Progress</a>
-                <a href="#" class="text-gray-600 hover:text-red-600">Notifikasi</a>
+                <a href="{{ route('dig.progresses') }}" class="text-gray-600 hover:text-red-600">Progress</a> <a
+                    href="#" class="text-gray-600 hover:text-red-600">Notifikasi</a>
                 <a href="#" class="text-gray-600 hover:text-red-600">Arsip</a>
                 <span class="font-semibold text-red-600">DIG</span>
             </nav>
@@ -195,21 +195,33 @@
                             </div>
 
                             <div class="flex items-start gap-2 justify-end">
-                                <button class="p-2 rounded-lg bg-white/60 hover:bg-white border" title="Edit">
+                                {{-- EDIT --}}
+                                <a href="{{ route('projects.edit', $project->id) }}"
+                                    class="p-2 rounded-lg bg-white/60 hover:bg-white border" title="Edit Project">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24"
                                         fill="currentColor">
                                         <path
                                             d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM22.61 5.64c.39-.39.39-1.02 0-1.41l-2.83-2.83a.9959.9959 0 0 0-1.41 0L16.13 3.04l3.75 3.75 2.73-2.73z" />
                                     </svg>
-                                </button>
-                                <button class="p-2 rounded-lg bg-white/60 hover:bg-white border" title="Hapus">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24"
-                                        fill="currentColor">
-                                        <path
-                                            d="M6 7h12v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm3-4h6l1 1h4v2H4V4h4l1-1z" />
-                                    </svg>
-                                </button>
+                                </a>
+
+                                {{-- HAPUS --}}
+                                <form action="{{ route('projects.destroy', $project->id) }}" method="POST"
+                                    onsubmit="return confirm('Yakin ingin menghapus project ini? Aksi ini tidak bisa dibatalkan.');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="p-2 rounded-lg bg-white/60 hover:bg-white border"
+                                        title="Hapus Project">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24"
+                                            fill="currentColor">
+                                            <path
+                                                d="M6 7h12v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm3-4h6l1 1h4v2H4V4h4l1-1z" />
+                                        </svg>
+                                    </button>
+                                </form>
                             </div>
+
+
                         </div>
 
                         {{-- TOMBOL TAMBAH PROGRESS (DI ATAS LIST) --}}
@@ -262,8 +274,31 @@
                                             : 0;
                                     @endphp
                                     <div class="rounded-xl bg-[#E6CACA] p-4">
-                                        <div class="font-semibold mb-2">Progress {{ $loop->iteration }} —
-                                            {{ $pr->name }}</div>
+                                        <div class="flex items-start justify-between mb-2">
+                                            <div class="font-semibold">Progress {{ $loop->iteration }} —
+                                                {{ $pr->name }}</div>
+
+                                            {{-- 👉 Aksi Edit & Hapus --}}
+                                            <div class="flex gap-2">
+                                                <button type="button"
+                                                    class="px-3 py-1.5 text-xs rounded-lg border bg-white/70 hover:bg-white"
+                                                    onclick="document.getElementById('editProgress-{{ $pr->id }}').classList.toggle('hidden')">
+                                                    Edit
+                                                </button>
+
+                                                <form method="POST"
+                                                    action="{{ route('progresses.destroy', $pr->id) }}"
+                                                    onsubmit="return confirm('Hapus progress ini? Tindakan tidak bisa dibatalkan.');">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button
+                                                        class="px-3 py-1.5 text-xs rounded-lg border bg-white/70 hover:bg-white">
+                                                        Hapus
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
+
                                         <div class="text-sm grid gap-1 mb-3">
                                             <div><span class="inline-block w-32 text-gray-700">Timeline Mulai</span>:
                                                 {{ $pr->start_date }}</div>
@@ -275,7 +310,44 @@
                                                     Progress</span>: {{ $realisasi }}%</div>
                                         </div>
 
-                                        {{-- Form update progress (harian) --}}
+                                        {{-- 👉 Form EDIT PROGRESS (inline, hidden) --}}
+                                        <div id="editProgress-{{ $pr->id }}" class="hidden mb-3">
+                                            <form method="POST" action="{{ route('progresses.update', $pr->id) }}"
+                                                class="grid grid-cols-1 md:grid-cols-5 gap-2 bg-white/70 rounded-xl p-3 border">
+                                                @csrf
+                                                @method('PUT')
+
+                                                <input name="name" value="{{ old('name', $pr->name) }}" required
+                                                    class="rounded-xl bg-white border px-3 py-2 outline-none md:col-span-2"
+                                                    placeholder="Nama progress">
+                                                <input type="date" name="start_date"
+                                                    value="{{ old('start_date', $pr->start_date) }}" required
+                                                    class="rounded-xl bg-white border px-3 py-2 outline-none">
+                                                <input type="date" name="end_date"
+                                                    value="{{ old('end_date', $pr->end_date) }}" required
+                                                    class="rounded-xl bg-white border px-3 py-2 outline-none">
+
+                                                <select name="desired_percent" required
+                                                    class="rounded-xl bg-white border px-3 py-2 outline-none">
+                                                    @for ($i = 0; $i <= 100; $i += 5)
+                                                        <option value="{{ $i }}"
+                                                            @selected((int) old('desired_percent', $pr->desired_percent) === $i)>{{ $i }}%</option>
+                                                    @endfor
+                                                </select>
+                                                <button
+                                                    class="inline-flex items-center justify-center 
+                                                    h-[48px] min-w-[180px] px-4
+                                                    rounded-[24px] border-2 border-[#7A1C1C] 
+                                                    bg-[#E2B9B9] hover:bg-[#D9AFAF] 
+                                                    font-semibold text-sm whitespace-nowrap">
+                                                    Simpan Perubahan
+                                                </button>
+
+
+                                            </form>
+                                        </div>
+
+                                        {{-- Form UPDATE PROGRESS HARIAN (tetap seperti punyamu) --}}
                                         <form method="POST"
                                             action="{{ route('progresses.updates.store', $pr->id) }}"
                                             class="grid grid-cols-1 md:grid-cols-5 gap-2">
@@ -287,11 +359,13 @@
                                                 placeholder="%" required
                                                 class="rounded-xl bg-white/80 border border-[#C89898] px-3 py-2 outline-none">
                                             <button
-                                                class="rounded-xl border-2 border-[#7A1C1C] bg-[#E2B9B9] px-4 py-2 font-semibold hover:bg-[#D9AFAF]">
+                                                class="inline-flex items-center justify-center 
+                                                    h-[38px] min-w-[100px] px-2 rounded-[24px] border-2 border-[#7A1C1C] bg-[#E2B9B9] px-4 py-2 font-semibold hover:bg-[#D9AFAF]">
                                                 Simpan
                                             </button>
                                         </form>
                                     </div>
+
                                 @empty
                                     <div class="col-span-2 text-sm text-gray-600">Belum ada progress.</div>
                                 @endforelse
@@ -312,19 +386,25 @@
     </div>
 
     {{-- MODAL TAMBAH PROJECT --}}
+    {{-- MODAL TAMBAH PROJECT --}}
     <div id="newProjectModal" class="hidden fixed inset-0 z-40">
         <div id="modalBackdrop" class="absolute inset-0 bg-black/40"></div>
         <div
-            class="relative max-w-4xl mx-auto mt-10 mb-6 bg-[#FFF5F5] rounded-2xl shadow-xl border border-[#E7C9C9] overflow-hidden max-h=[90vh] flex flex-col">
+            class="relative max-w-4xl mx-auto my-10 bg-[#FFF5F5] rounded-2xl shadow-xl border border-[#E7C9C9]
+               max-h-[90vh] flex flex-col overflow-hidden">
+
+            {{-- HEADER --}}
             <div class="flex items-center justify-between px-6 py-4 bg-[#F6E4E4] border-b border-[#E7C9C9]">
                 <h3 class="text-lg font-semibold">Tambah Project</h3>
                 <button id="closeNewProject" class="text-[#7A1C1C] text-2xl leading-none"
                     type="button">&times;</button>
             </div>
 
+            {{-- FORM (scrollable) --}}
             <form method="POST" action="{{ route('projects.store') }}"
-                class="overflow-y-auto px-6 pt-5 pb-7 space-y-6">
+                class="flex-1 overflow-y-auto px-6 pt-5 pb-7 space-y-6">
                 @csrf
+
                 <section>
                     <h4 class="text-base font-semibold mb-2">Nama Project</h4>
                     <input name="name" required value="{{ old('name') }}"
@@ -332,35 +412,102 @@
                         placeholder="Tulis nama project..." />
                 </section>
 
-                {{-- Progress 1 --}}
-                <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <h4 class="text-base font-semibold mb-2">Progress 1</h4>
-                        <input name="progresses[0][name]" required value="{{ old('progresses.0.name') }}"
-                            class="w-full rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] px-4 py-3 outline-none"
-                            placeholder="Nama Progress" />
+                {{-- PROGRESSES (dinamis) --}}
+                <section class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-base font-semibold">Daftar Progress</h4>
+                        <button type="button" id="addProgressBtn"
+                            class="inline-flex items-center gap-2 rounded-full border-2 border-[#7A1C1C]
+                               bg-white hover:bg-[#FFF2F2] text-[#7A1C1C] font-semibold h-[36px] px-3">
+                            <span
+                                class="grid place-items-center w-6 h-6 rounded-full bg-[#7A1C1C] text-white leading-none">+</span>
+                            Tambah Progress
+                        </button>
                     </div>
-                    <div>
-                        <h4 class="text-base font-semibold mb-2">Timeline Progress 1</h4>
-                        <div class="grid grid-cols-2 gap-2">
-                            <input type="date" name="progresses[0][start_date]" required
-                                value="{{ old('progresses.0.start_date') }}"
-                                class="rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] px-4 py-3 outline-none">
-                            <input type="date" name="progresses[0][end_date]" required
-                                value="{{ old('progresses.0.end_date') }}"
-                                class="rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] px-4 py-3 outline-none">
+
+                    <div id="progressList" class="space-y-4">
+                        {{-- Row progress awal (index 0) --}}
+                        <div class="progress-row rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] p-4"
+                            data-index="0">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="font-semibold text-sm">Progress <span class="progress-number">1</span>
+                                </div>
+                                <button type="button"
+                                    class="removeProgressBtn text-xs px-2 py-1 rounded-lg border border-red-300 text-red-700 hover:bg-red-50"
+                                    disabled>Hapus</button>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-sm font-semibold mb-1 block">Nama Progress</label>
+                                    <input name="progresses[0][name]" required value="{{ old('progresses.0.name') }}"
+                                        class="w-full rounded-xl bg-white/80 border border-[#C89898] px-4 py-3 outline-none"
+                                        placeholder="Nama Progress" />
+                                </div>
+
+                                <div>
+                                    <label class="text-sm font-semibold mb-1 block">Timeline</label>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <input type="date" name="progresses[0][start_date]" required
+                                            value="{{ old('progresses.0.start_date') }}"
+                                            class="rounded-xl bg-white/80 border border-[#C89898] px-4 py-3 outline-none">
+                                        <input type="date" name="progresses[0][end_date]" required
+                                            value="{{ old('progresses.0.end_date') }}"
+                                            class="rounded-xl bg-white/80 border border-[#C89898] px-4 py-3 outline-none">
+                                    </div>
+                                    <label class="block text-sm font-semibold mt-3 mb-1">Target (%)</label>
+                                    <select name="progresses[0][desired_percent]" required
+                                        class="w-full rounded-xl bg-white/80 border border-[#C89898] px-4 py-3 outline-none cursor-pointer">
+                                        @for ($i = 0; $i <= 100; $i += 5)
+                                            <option value="{{ $i }}"
+                                                {{ (int) old('progresses.0.desired_percent', 75) === $i ? 'selected' : '' }}>
+                                                {{ $i }}%</option>
+                                        @endfor
+                                    </select>
+                                </div>
+                            </div>
                         </div>
-                        <label class="block text-sm font-semibold mt-3 mb-1">Keinginan Awal (Progress 1)</label>
-                        <select name="progresses[0][desired_percent]" required
-                            class="w-full rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] px-4 py-3 outline-none cursor-pointer">
-                            @for ($i = 0; $i <= 100; $i += 5)
-                                <option value="{{ $i }}"
-                                    {{ (int) old('progresses.0.desired_percent', 75) === $i ? 'selected' : '' }}>
-                                    {{ $i }}%</option>
-                            @endfor
-                        </select>
                     </div>
                 </section>
+
+                {{-- TEMPLATE untuk row baru --}}
+                <template id="progressRowTemplate">
+                    <div class="progress-row rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] p-4"
+                        data-index="__INDEX__">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="font-semibold text-sm">Progress <span
+                                    class="progress-number">__NUMBER__</span></div>
+                            <button type="button"
+                                class="removeProgressBtn text-xs px-2 py-1 rounded-lg border border-red-300 text-red-700 hover:bg-red-50">Hapus</button>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-sm font-semibold mb-1 block">Nama Progress</label>
+                                <input name="progresses[__INDEX__][name]" required
+                                    class="w-full rounded-xl bg-white/80 border border-[#C89898] px-4 py-3 outline-none"
+                                    placeholder="Nama Progress" />
+                            </div>
+
+                            <div>
+                                <label class="text-sm font-semibold mb-1 block">Timeline</label>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <input type="date" name="progresses[__INDEX__][start_date]" required
+                                        class="rounded-xl bg-white/80 border border-[#C89898] px-4 py-3 outline-none">
+                                    <input type="date" name="progresses[__INDEX__][end_date]" required
+                                        class="rounded-xl bg-white/80 border border-[#C89898] px-4 py-3 outline-none">
+                                </div>
+                                <label class="block text-sm font-semibold mt-3 mb-1">Target (%)</label>
+                                <select name="progresses[__INDEX__][desired_percent]" required
+                                    class="w-full rounded-xl bg-white/80 border border-[#C89898] px-4 py-3 outline-none cursor-pointer">
+                                    @for ($i = 0; $i <= 100; $i += 5)
+                                        <option value="{{ $i }}">{{ $i }}%</option>
+                                    @endfor
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </template>
 
                 {{-- PJ & Deskripsi --}}
                 @php $me = auth()->user(); @endphp
@@ -371,52 +518,15 @@
                             <select name="digital_banking_id" required
                                 class="w-full rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] px-4 py-3 outline-none cursor-pointer">
                                 <option value="">Pilih Nama</option>
-                                @if ($me && $me->role === 'digital_banking')
-                                    <optgroup label="Saya">
-                                        <option value="{{ $me->id }}"
-                                            {{ (string) old('digital_banking_id', $me->id) === (string) $me->id ? 'selected' : '' }}>
-                                            {{ $me->name }} {{ $me->username ? '(' . $me->username . ')' : '' }}
-                                        </option>
-                                    </optgroup>
-                                @endif
-                                <optgroup label="Semua User Digital Banking">
-                                    @forelse(($digitalUsers ?? collect()) as $u)
-                                        @continue($me && $me->role === 'digital_banking' && (string) $u->id === (string) $me->id)
-                                        <option value="{{ $u->id }}"
-                                            {{ (string) old('digital_banking_id', $me && $me->role === 'digital_banking' ? $me->id : '') === (string) $u->id ? 'selected' : '' }}>
-                                            {{ $u->name }} {{ $u->username ? '(' . $u->username . ')' : '' }}
-                                        </option>
-                                    @empty
-                                        <option value="" disabled>Belum ada user role Digital Banking</option>
-                                    @endforelse
-                                </optgroup>
+                                {{-- isi sesuai user --}}
                             </select>
                         </div>
-
                         <div>
                             <h4 class="text-base font-semibold mb-2">Penanggung Jawab (Developer / IT)</h4>
                             <select name="developer_id" required
                                 class="w-full rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] px-4 py-3 outline-none cursor-pointer">
                                 <option value="">Pilih Nama</option>
-                                @if ($me && $me->role === 'it')
-                                    <optgroup label="Saya">
-                                        <option value="{{ $me->id }}"
-                                            {{ (string) old('developer_id', $me->id) === (string) $me->id ? 'selected' : '' }}>
-                                            {{ $me->name }} {{ $me->username ? '(' . $me->username . ')' : '' }}
-                                        </option>
-                                    </optgroup>
-                                @endif
-                                <optgroup label="Semua User IT">
-                                    @forelse(($itUsers ?? collect()) as $u)
-                                        @continue($me && $me->role === 'it' && (string) $u->id === (string) $me->id)
-                                        <option value="{{ $u->id }}"
-                                            {{ (string) old('developer_id', $me && $me->role === 'it' ? $me->id : '') === (string) $u->id ? 'selected' : '' }}>
-                                            {{ $u->name }} {{ $u->username ? '(' . $u->username . ')' : '' }}
-                                        </option>
-                                    @empty
-                                        <option value="" disabled>Belum ada user role IT</option>
-                                    @endforelse
-                                </optgroup>
+                                {{-- isi sesuai user --}}
                             </select>
                         </div>
                     </div>
@@ -438,6 +548,7 @@
             </form>
         </div>
     </div>
+
 
     {{-- SCRIPTS --}}
     <script>
@@ -473,6 +584,75 @@
             });
         });
     </script>
+    <script>
+        // === Dinamis Progress ===
+        (function() {
+            const list = document.getElementById('progressList');
+            const addBtn = document.getElementById('addProgressBtn');
+            const tpl = document.getElementById('progressRowTemplate');
+
+            if (!list || !addBtn || !tpl) return;
+
+            const renumber = () => {
+                const rows = list.querySelectorAll('.progress-row');
+                rows.forEach((row, i) => {
+                    row.querySelector('.progress-number').textContent = i + 1;
+                    // enable remove button only if more than 1 row
+                    const removeBtn = row.querySelector('.removeProgressBtn');
+                    if (removeBtn) removeBtn.disabled = rows.length <= 1;
+                });
+            };
+
+            const addRow = () => {
+                const currentIndex = list.querySelectorAll('.progress-row').length;
+                const html = tpl.innerHTML
+                    .replaceAll('__INDEX__', currentIndex)
+                    .replaceAll('__NUMBER__', currentIndex + 1);
+                const container = document.createElement('div');
+                container.innerHTML = html.trim();
+                const row = container.firstElementChild;
+
+                // tombol hapus di row baru
+                row.querySelector('.removeProgressBtn').addEventListener('click', () => {
+                    row.remove();
+                    renumber();
+                    // setelah remove, kita juga harus re-index name[] agar berurutan lagi
+                    reindexNames();
+                });
+
+                list.appendChild(row);
+                renumber();
+            };
+
+            const reindexNames = () => {
+                // pastikan name="progresses[idx][field]" berurutan setelah delete
+                const rows = list.querySelectorAll('.progress-row');
+                rows.forEach((row, idx) => {
+                    row.dataset.index = idx;
+                    row.querySelectorAll('input[name], select[name]').forEach(el => {
+                        el.name = el.name.replace(/progresses\[\d+\]/, `progresses[${idx}]`);
+                    });
+                });
+            };
+
+            // Tambah row saat klik +
+            addBtn.addEventListener('click', addRow);
+
+            // Hapus row pertama? default: disabled, tapi kalau user duplikat lalu hapus yang lain, tetap ok
+            const firstRemove = list.querySelector('.removeProgressBtn');
+            if (firstRemove) {
+                firstRemove.addEventListener('click', (e) => {
+                    const rows = list.querySelectorAll('.progress-row');
+                    if (rows.length > 1) {
+                        e.currentTarget.closest('.progress-row').remove();
+                        renumber();
+                        reindexNames();
+                    }
+                });
+            }
+        })();
+    </script>
+
 </body>
 
 </html>

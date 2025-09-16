@@ -82,3 +82,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/dig/dashboard', [DashboardController::class, 'digDashboard'])->name('dig.dashboard');
 });
 
+Route::resource('projects', ProjectController::class)->only(['edit','update','destroy']);
+
+Route::get   ('/progresses/{progress}/edit',   [ProgressController::class, 'edit'])->name('progresses.edit');   // optional kalau mau halaman edit terpisah
+Route::put   ('/progresses/{progress}',        [ProgressController::class, 'update'])->name('progresses.update');
+Route::delete('/progresses/{progress}',        [ProgressController::class, 'destroy'])->name('progresses.destroy');
+Route::get('/dig/progresses', [ProjectController::class,'progresses'])->name('dig.progresses');

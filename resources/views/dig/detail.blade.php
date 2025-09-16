@@ -56,13 +56,34 @@
       {{-- INFO UTAMA --}}
       <div class="grid sm:grid-cols-2 gap-y-1 gap-x-10 text-[13px] leading-5">
         <div><span class="inline-block w-40 text-gray-700">Nama Project</span> : <span class="font-semibold">{{ $project->name }}</span></div>
-        <div><span class="inline-block w-40 text-gray-700">Penanggung Jawab</span> : Allyssa</div>
+        <div><span class="inline-block w-40 text-gray-700">Penanggung Jawab</span> : —</div>
         <div><span class="inline-block w-40 text-gray-700">(Digital Banking)</span> : {{ optional($project->digitalBanking)->name ?? '-' }}</div>
         <div><span class="inline-block w-40 text-gray-700">(Developer)</span> : {{ optional($project->developer)->name ?? '-' }}</div>
       </div>
 
-      {{-- CTA TAMBAH PROGRESS --}}
-      <div class="flex justify-end">
+      {{-- AKSI PROJECT + CTA TAMBAH PROGRESS --}}
+      <div class="flex flex-col items-end gap-2">
+        <div class="flex items-center gap-2">
+          {{-- EDIT PROJECT --}}
+          <a href="{{ route('projects.edit', $project->id) }}"
+             class="p-2 rounded-lg bg-white/60 hover:bg-white border" title="Edit Project">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM22.61 5.64c.39-.39.39-1.02 0-1.41l-2.83-2.83a.9959.9959 0 0 0-1.41 0L16.13 3.04l3.75 3.75 2.73-2.73z"/>
+            </svg>
+          </a>
+          {{-- HAPUS PROJECT --}}
+          <form action="{{ route('projects.destroy', $project->id) }}" method="POST"
+                onsubmit="return confirm('Yakin ingin menghapus project ini? Aksi ini tidak bisa dibatalkan.');">
+            @csrf
+            @method('DELETE')
+            <button type="submit" class="p-2 rounded-lg bg-white/60 hover:bg-white border" title="Hapus Project">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6 7h12v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm3-4h6l1 1h4v2H4V4h4l1-1z"/>
+              </svg>
+            </button>
+          </form>
+        </div>
+
         <button type="button" id="btnToggleProgressForm"
                 class="inline-flex items-center gap-2 rounded-[12px] px-4 py-2 text-white text-[13px] font-semibold bg-[#7A1C1C] shadow"
                 data-target="progressForm-{{ $project->id }}">
@@ -106,7 +127,6 @@
         @php
           $last = $pr->updates->sortByDesc('update_date')->first();
           $realisasi = $last ? (int)($last->percent ?? $last->progress_percent ?? 0) : 0;
-          $today = now()->toDateString();
           $canConfirm = $realisasi >= (int)$pr->desired_percent && !$pr->confirmed_at;
         @endphp
 
@@ -119,9 +139,26 @@
               </span>
             </div>
 
-            <div>
+            <div class="flex items-center gap-2">
+              {{-- TOGGLE EDIT PROGRESS --}}
+              <button type="button"
+                      class="px-3 py-1.5 text-xs rounded-lg border bg-white/70 hover:bg-white btn-edit-progress"
+                      data-target="editProgress-{{ $pr->id }}">
+                Edit
+              </button>
+              {{-- HAPUS PROGRESS --}}
+              <form method="POST" action="{{ route('progresses.destroy', $pr->id) }}"
+                    onsubmit="return confirm('Hapus progress ini? Tindakan tidak bisa dibatalkan.');">
+                @csrf
+                @method('DELETE')
+                <button class="px-3 py-1.5 text-xs rounded-lg border bg-white/70 hover:bg-white">
+                  Hapus
+                </button>
+              </form>
+
+              {{-- KONFIRMASI SELESAI --}}
               @if($pr->confirmed_at)
-                <span class="rounded-full bg-[#7A1C1C] text-white px-4 py-1 text-[12px] font-semibold">Project Selesai</span>
+                <span class="rounded-full bg-[#7A1C1C] text-white px-4 py-1 text-[12px] font-semibold">Selesai</span>
               @else
                 <form method="POST" action="{{ route('progresses.confirm', $pr->id) }}">
                   @csrf
@@ -174,12 +211,46 @@
               </div>
             </div>
 
-            {{-- FORM UPDATE & CATATAN (panel kanan) --}}
+            {{-- PANEL KANAN: UPDATE & CATATAN --}}
             <div class="rounded-[14px] bg-white border border-[#E0BEBE] p-4">
               <div class="flex items-center justify-end mb-2">
                 @if($pr->confirmed_at)
                   <span class="inline-block text-[11px] rounded-full bg-green-100 text-green-700 px-2 py-0.5">Project Selesai</span>
                 @endif
+              </div>
+
+              {{-- FORM EDIT PROGRESS (INLINE, HIDDEN) --}}
+              <div id="editProgress-{{ $pr->id }}" class="hidden mb-4">
+                <div class="text-[12px] text-gray-700 font-semibold mb-1">Edit Progress</div>
+                <form method="POST" action="{{ route('progresses.update', $pr->id) }}" class="grid grid-cols-1 gap-2">
+                  @csrf
+                  @method('PUT')
+                  <input name="name" value="{{ old('name', $pr->name) }}" required
+                         class="rounded-xl bg-[#F6EAEA] border border-[#C89898] px-3 py-2 text-[13px]" placeholder="Nama progress">
+                  <div class="grid grid-cols-2 gap-2">
+                    <input type="date" name="start_date" value="{{ old('start_date', $pr->start_date) }}" required
+                           class="rounded-xl bg-[#F6EAEA] border border-[#C89898] px-3 py-2 text-[13px]">
+                    <input type="date" name="end_date" value="{{ old('end_date', $pr->end_date) }}" required
+                           class="rounded-xl bg-[#F6EAEA] border border-[#C89898] px-3 py-2 text-[13px]">
+                  </div>
+                  <select name="desired_percent" required
+                          class="rounded-xl bg-[#F6EAEA] border border-[#C89898] px-3 py-2 text-[13px]">
+                    @for ($x = 0; $x <= 100; $x += 5)
+                      <option value="{{ $x }}" @selected((int)old('desired_percent', $pr->desired_percent) === $x)>{{ $x }}%</option>
+                    @endfor
+                  </select>
+
+                  <div class="flex justify-end">
+                    <button
+                      class="inline-flex items-center justify-center
+                             h-[40px] min-w-[160px] px-5
+                             rounded-full border-2 border-[#7A1C1C]
+                             bg-[#E2B9B9] hover:bg-[#D9AFAF]
+                             font-semibold text-sm whitespace-nowrap">
+                      Simpan Perubahan
+                    </button>
+                  </div>
+                </form>
               </div>
 
               {{-- UPDATE PROGRESS (tgl otomatis harian) --}}
@@ -214,12 +285,21 @@
     </div>
   </div>
 
-  {{-- Toggle script untuk form Tambah Progress --}}
+  {{-- Toggle script untuk form Tambah Progress & Edit Progress --}}
   <script>
+    // toggle form tambah progress (project)
     const btn = document.getElementById('btnToggleProgressForm');
     btn?.addEventListener('click', () => {
       const id = btn.getAttribute('data-target');
       document.getElementById(id)?.classList.toggle('hidden');
+    });
+
+    // toggle setiap form edit progress (inline)
+    document.querySelectorAll('.btn-edit-progress').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        const target = b.getAttribute('data-target');
+        document.getElementById(target)?.classList.toggle('hidden');
+      });
     });
   </script>
 </body>
