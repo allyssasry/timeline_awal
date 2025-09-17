@@ -56,9 +56,9 @@
       {{-- INFO UTAMA --}}
       <div class="grid sm:grid-cols-2 gap-y-1 gap-x-10 text-[13px] leading-5">
         <div><span class="inline-block w-40 text-gray-700">Nama Project</span> : <span class="font-semibold">{{ $project->name }}</span></div>
-        <div><span class="inline-block w-40 text-gray-700">Penanggung Jawab</span> : —</div>
-        <div><span class="inline-block w-40 text-gray-700">(Digital Banking)</span> : {{ optional($project->digitalBanking)->name ?? '-' }}</div>
-        <div><span class="inline-block w-40 text-gray-700">(Developer)</span> : {{ optional($project->developer)->name ?? '-' }}</div>
+        <div><span class="inline-block w-40 text-gray-700">Penanggung Jawab (DIG)</span> : {{ optional($project->digitalBanking)->name ?? '-' }}</div>
+        <div><span class="inline-block w-40 text-gray-700"> Penanggung Jawab (Developer)</span> : {{ optional($project->developer)->name ?? '-' }}</div>
+        <div><span class="inline-block w-40 text-gray-700"> Deskripsi</span> : {{ $project->description ?: '-' }}</div>
       </div>
 
       {{-- AKSI PROJECT + CTA TAMBAH PROGRESS --}}
