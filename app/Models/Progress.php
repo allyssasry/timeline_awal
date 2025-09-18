@@ -14,7 +14,9 @@ class Progress extends Model
         'start_date',
         'end_date',
         'desired_percent',
-        'confirmed_at'
+        'confirmed_at',
+        'created_by' // ⬅️ catat pembuat progress
+
     ];
 
     protected $casts = [
@@ -42,5 +44,9 @@ class Progress extends Model
     {
         $u = $this->updates()->first();
         return $u ? (int) $u->percent : 0;
+    }
+      public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 }

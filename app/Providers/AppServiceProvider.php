@@ -21,4 +21,9 @@ class AppServiceProvider extends ServiceProvider
     {
         //
     }
+    // app/Providers/AuthServiceProvider.php
+protected $policies = [
+    \App\Models\Progress::class => \App\Policies\ProgressPolicy::class,
+];
+
 }

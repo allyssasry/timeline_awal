@@ -1,4 +1,5 @@
 <?php
+// app/Http/Controllers/ProgressController.php
 
 namespace App\Http\Controllers;
 
@@ -23,6 +24,9 @@ class ProgressController extends Controller
             'desired_percent' => ['required','integer','min:0','max:100'],
         ]);
 
+        // dari snippet atas: catat pembuat progress
+        $data['created_by'] = Auth::id();
+
         $project->progresses()->create($data);
 
         return back()->with('success','Progress berhasil ditambahkan.');
@@ -43,6 +47,9 @@ class ProgressController extends Controller
      */
     public function update(Request $request, Progress $progress)
     {
+        // dari snippet atas: pastikan user berhak
+        $this->authorize('manage', $progress);
+
         $data = $request->validate([
             'name'            => ['required','string','max:255'],
             'start_date'      => ['required','date'],
@@ -61,6 +68,9 @@ class ProgressController extends Controller
      */
     public function destroy(Progress $progress)
     {
+        // dari snippet atas: pastikan user berhak
+        $this->authorize('manage', $progress);
+
         $progress->delete();
 
         return back()->with('success', 'Progress berhasil dihapus.');
@@ -75,6 +85,9 @@ class ProgressController extends Controller
      */
     public function confirm(Progress $progress)
     {
+        // dari snippet atas: pastikan user berhak
+        $this->authorize('manage', $progress);
+
         // Jika sudah pernah dikonfirmasi, tidak usah lanjut
         if ($progress->confirmed_at) {
             return back()->with('success', 'Progress sudah dikonfirmasi sebelumnya.');
@@ -94,15 +107,13 @@ class ProgressController extends Controller
 
         // ----- Kirim notifikasi ke DIG hanya jika dikerjakan & dikonfirmasi oleh IT -----
         $confirmer     = Auth::user();
-        $project       = $progress->project;            // pastikan relasi progress->project ada
-        $developerUser = optional($project)->developer; // user IT yang ditunjuk di project
-        $digitalUser   = optional($project)->digitalBanking; // user DIG (penerima notifikasi)
+        $project       = $progress->project;                  // pastikan relasi progress->project ada
+        $developerUser = optional($project)->developer;       // user IT yang ditunjuk di project
+        $digitalUser   = optional($project)->digitalBanking;  // user DIG (penerima notifikasi)
 
-        $confirmerRole = optional($confirmer)->role;
-        $developerRole = optional($developerUser)->role;
-
-        // Syarat: developer IT & confirmer IT & ada penerima (DIG)
-        if ($developerRole === 'it' && $confirmerRole === 'it' && $digitalUser) {
+        if (optional($developerUser)->role === 'it'
+            && optional($confirmer)->role === 'it'
+            && $digitalUser) {
             $digitalUser->notify(new ProgressConfirmed($progress, $confirmer));
         }
 
@@ -121,8 +132,7 @@ class ProgressController extends Controller
 
         // Jika semua selesai dan project belum ditandai selesai, set finished_at
         if ($allDone && is_null($project->finished_at)) {
-            $project->finished_at = now();
-            $project->save();
+            $project->forceFill(['finished_at' => now()])->save();
         }
 
         return back()->with('success', $allDone ? 'Project selesai dikonfirmasi.' : 'Progress selesai dikonfirmasi.');

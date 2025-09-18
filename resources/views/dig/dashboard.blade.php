@@ -86,21 +86,26 @@
             <h1 class="text-white text-2xl md:text-3xl font-bold">Selamat Datang di Timeline Progress</h1>
         </div>
     </section>
+  <header class="sticky top-0 z-30 bg-[#F3DCDC]/90 backdrop-blur border-b">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+    <span class="font-semibold text-gray-600 text-lg">Project</span>
+    
+    {{-- TOMBOL TAMBAH PROJECT --}}
+    <div class="flex justify-end">
+      <button id="openNewProject" type="button"
+        class="inline-flex items-center gap-2 rounded-full border border-[#7A1C1C] bg-white hover:bg-[#FFF2F2] text-[#7A1C1C] font-medium h-[32px] px-3 text-sm shadow-sm">
+        <span class="grid place-items-center w-6 h-6 rounded-full bg-[#7A1C1C] text-white">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2h6z" />
+          </svg>
+        </span>
+        Tambah Project
+      </button>
+    </div>
+  </div>
+</header>
 
     <div class="max-w-6xl mx-auto px-5">
-        {{-- TOMBOL TAMBAH PROJECT (DI BAWAH BANNER) --}}
-        <div class="flex justify-end mt-6">
-            <button id="openNewProject" type="button"
-                class="inline-flex items-center gap-2 rounded-full border-2 border-[#7A1C1C] bg-white hover:bg-[#FFF2F2] text-[#7A1C1C] font-semibold h-[40px] px-4 shadow-sm">
-                <span class="grid place-items-center w-7 h-7 rounded-full bg-[#7A1C1C] text-white">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2h6z" />
-                    </svg>
-                </span>
-                Tambah Project
-            </button>
-        </div>
-
         {{-- NOTIFIKASI --}}
         @if (session('success'))
             <div class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">{{ session('success') }}
