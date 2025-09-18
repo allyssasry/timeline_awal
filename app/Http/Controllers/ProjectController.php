@@ -15,6 +15,19 @@ class ProjectController extends Controller
      * - Ambil progresses + 1 update terbaru/ progress (untuk ring/preview)
      * - Kirim juga daftar user DIG & IT untuk dropdown di modal
      */
+    public function create()
+    {
+        // Dropdown penanggung jawab berdasar role
+        $digitalUsers = User::where('role', 'digital_banking')->orderBy('name')->get();
+        $itUsers      = User::where('role', 'it')->orderBy('name')->get();
+
+        // Tetap render dashboard, tapi kirim flag agar modal "Tambah Project" dibuka
+        $projects = Project::with(['creator', 'progresses'])->withCount('progresses')->get();
+
+        return view('dig.dashboard', compact('projects', 'digitalUsers', 'itUsers'))
+               ->with('openCreateModal', true);
+    }
+    
     public function index()
     {
         $projects = Project::with([

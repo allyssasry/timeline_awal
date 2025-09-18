@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Progress;
 use App\Models\ProgressUpdate;
 use App\Models\ProgressNote;
+use App\Notifications\ProgressConfirmed;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
@@ -12,11 +13,20 @@ use Illuminate\Validation\Rule;
 class ProgressUpdateController extends Controller
 {
     /** Menandai progress sudah dikonfirmasi. */
-    public function confirm(Progress $progress)
-    {
-        $progress->update(['confirmed_at' => now()]);
-        return back()->with('success', 'Progress berhasil dikonfirmasi.');
+   public function confirm(Progress $progress)
+{
+    // tandai selesai
+    $progress->update(['confirmed_at' => now()]);
+
+    // kirim notifikasi ke PIC Digital Banking dari project terkait
+    $digUser = $progress->project?->digitalBanking; // relasi: Project belongsTo(User, 'digital_banking_id')
+    if ($digUser) {
+        $digUser->notify(new ProgressConfirmed($progress));
     }
+
+    return back()->with('success', 'Progress berhasil dikonfirmasi.');
+}
+
 
     /**
      * Simpan update harian (STRICT: 1x/hari per progress).

@@ -23,16 +23,24 @@
         <img src="https://website-api.bankdki.co.id/integrations/storage/page-meta-data/007UlZbO3Oe6PivLltdFiQax6QH5kWDvb0cKPdn4.png" class="h-8" alt="Bank Jakarta" />
       </div>
       <nav class="hidden md:flex items-center gap-6 text-sm">
-        <a href="{{ route('dig.dashboard') }}" class="hover:text-red-700">Beranda</a>
-        <span class="font-semibold text-red-700">Progress</span>
-        <a href="#" class="hover:text-red-700">Notifikasi</a>
-        <a href="#" class="hover:text-red-700">Arsip</a>
+       <a href="{{ url('/dig/dashboard') }}" class="text-gray-600 hover:text-red-600">Beranda</a>
+        <a href="{{ route('dig.progresses') }}" class="font-semibold">Progress</a> 
+        <a href="{{ route('dig.notifications') }}" class="text-gray-600 hover:text-red-600">Notifikasi</a>
+        <a href="{{ route('arsip.arsip') }}" class="text-gray-600 hover:text-red-600">Arsip</a>
+        <span class="font-semibold text-red-600">DIG</span>
       </nav>
-      <button class="p-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M3 3h6v6H3V3zm12 0h6v6h-6V3zM3 15h6v6H3v-6zm12 0h6v6h-6v-6z"/>
-        </svg>
-      </button>
+       <div class="relative">
+                <button id="menuBtn" class="p-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M3 3h6v6H3V3zm12 0h6v6h-6V3zM3 15h6v6H3v-6zm12 0h6v6h-6v-6z" />
+                    </svg>
+                </button>
+                <div id="menuPanel"
+                    class="hidden absolute right-0 mt-2 w-48 rounded-xl shadow-lg bg-[#7A1C1C] text-white overflow-hidden">
+                    <a href="#" class="block px-4 py-3 hover:bg-[#6a1717]">Pengaturan Akun</a>
+                    <a href="/logout" class="block px-4 py-3 hover:bg-[#6a1717]">Log Out</a>
+                </div>
+        </div>
     </div>
   </header>
 

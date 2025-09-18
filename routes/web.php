@@ -1,5 +1,9 @@
 <?php
 
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
+use Illuminate\Http\Request;
+use App\Models\Project;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProjectController;
@@ -8,6 +12,8 @@ use App\Http\Controllers\ProgressUpdateController;
 // routes/web.php
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProgressNoteController;
+use App\Http\Controllers\DigNotificationController;
+
 
 
 
@@ -33,6 +39,65 @@ Route::middleware('auth')->group(function () {
 
 });
 
+Route::middleware('auth')->get('/arsip', function (Request $r) {
+    // Ambil semua project + relasi yang dibutuhkan
+    $projects = Project::with([
+        'digitalBanking',
+        'developer',
+        'progresses' => function ($q) {
+            $q->with(['updates' => fn($u) => $u->orderByDesc('update_date')]);
+        },
+    ])->get();
+
+    // 1) Filter hanya yang selesai (berdasarkan accessor is_finished)
+    $projects = $projects->filter->is_finished;
+
+    // 2) Pencarian (q) di nama/description
+    if ($r->filled('q')) {
+        $q = mb_strtolower($r->q);
+        $projects = $projects->filter(function ($p) use ($q) {
+            return str_contains(mb_strtolower($p->name ?? ''), $q)
+                || str_contains(mb_strtolower($p->description ?? ''), $q);
+        });
+    }
+
+    // 3) Filter rentang tanggal berdasarkan finished_at_calc
+    if ($r->filled('from')) {
+        $projects = $projects->filter(function ($p) use ($r) {
+            $d = optional($p->finished_at_calc)?->toDateString();
+            return $d && $d >= $r->from;
+        });
+    }
+    if ($r->filled('to')) {
+        $projects = $projects->filter(function ($p) use ($r) {
+            $d = optional($p->finished_at_calc)?->toDateString();
+            return $d && $d <= $r->to;
+        });
+    }
+
+    // 4) Sorting
+    $sort = $r->get('sort', 'finished_desc');
+    $projects = match ($sort) {
+        'finished_asc' => $projects->sortBy(fn($p) => $p->finished_at_calc ?? $p->updated_at),
+        'name_asc'     => $projects->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE),
+        'name_desc'    => $projects->sortByDesc('name', SORT_NATURAL | SORT_FLAG_CASE),
+        default        => $projects->sortByDesc(fn($p) => $p->finished_at_calc ?? $p->updated_at),
+    };
+
+    // 5) Paginate Collection (LengthAwarePaginator)
+    $perPage = 10;
+    $current = (int) ($r->get('page', 1));
+    $items = $projects instanceof Collection ? $projects : collect($projects);
+    $paged = new LengthAwarePaginator(
+        $items->forPage($current, $perPage)->values(),
+        $items->count(),
+        $perPage,
+        $current,
+        ['path' => $r->url(), 'query' => $r->query()]
+    );
+
+    return view('arsip.arsip', ['projects' => $paged]);
+})->name('arsip.arsip');
 
 Route::get('/dig/projects/{project}', [ProjectController::class, 'show'])
     ->name('dig.projects.show');
@@ -88,3 +153,9 @@ Route::get   ('/progresses/{progress}/edit',   [ProgressController::class, 'edit
 Route::put   ('/progresses/{progress}',        [ProgressController::class, 'update'])->name('progresses.update');
 Route::delete('/progresses/{progress}',        [ProgressController::class, 'destroy'])->name('progresses.destroy');
 Route::get('/dig/progresses', [ProjectController::class,'progresses'])->name('dig.progresses');
+
+Route::middleware('auth')->group(function () {
+    Route::get('/dig/notifications', [DigNotificationController::class, 'index'])->name('dig.notifications');
+    Route::post('/dig/notifications/read-all', [DigNotificationController::class, 'markAllRead'])->name('dig.notifications.readAll');
+    Route::post('/dig/notifications/{id}/read', [DigNotificationController::class, 'markRead'])->name('dig.notifications.read');
+});

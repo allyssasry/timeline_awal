@@ -43,6 +43,37 @@ class Project extends Model
         return $this->hasMany(ProgressUpdate::class);
     }
     // app/Models/Project.php
+    public function getIsFinishedAttribute(): bool
+    {
+        if (!$this->relationLoaded('progresses')) {
+            $this->load(['progresses.updates' => fn($q) => $q->orderByDesc('update_date')]);
+        }
+
+        if ($this->progresses->isEmpty()) return false;
+
+        foreach ($this->progresses as $pr) {
+            $latest = $pr->updates->first(); // karena kita sort desc
+            $real   = (int) ($latest->progress_percent ?? $latest->percent ?? 0);
+
+            if (is_null($pr->confirmed_at) || $real < (int) $pr->desired_percent) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+      public function getFinishedAtCalcAttribute()
+    {
+        if (!$this->relationLoaded('progresses')) {
+            $this->load('progresses');
+        }
+
+        $dates = $this->progresses
+            ->pluck('confirmed_at')
+            ->filter();
+
+        return $dates->isNotEmpty() ? $dates->max() : null;
+    }
 
 }
 

@@ -497,35 +497,80 @@
                     </div>
                 </template>
 
-                {{-- PJ & Deskripsi --}}
-                @php $me = auth()->user(); @endphp
-                <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="grid grid-cols-1 gap-5">
-                        <div>
-                            <h4 class="text-base font-semibold mb-2">Penanggung Jawab (Digital Banking)</h4>
-                            <select name="digital_banking_id" required
-                                class="w-full rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] px-4 py-3 outline-none cursor-pointer">
-                                <option value="">Pilih Nama</option>
-                                {{-- isi sesuai user --}}
-                            </select>
-                        </div>
-                        <div>
-                            <h4 class="text-base font-semibold mb-2">Penanggung Jawab (Developer / IT)</h4>
-                            <select name="developer_id" required
-                                class="w-full rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] px-4 py-3 outline-none cursor-pointer">
-                                <option value="">Pilih Nama</option>
-                                {{-- isi sesuai user --}}
-                            </select>
-                        </div>
-                    </div>
+  {{-- Penanggung jawab + Deskripsi --}}
+      @php $me = auth()->user(); @endphp
+      <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 gap-5">
+          <div>
+            <h4 class="text-base font-semibold mb-2">Penanggung Jawab (Digital Banking)</h4>
+            <select name="digital_banking_id" required
+                    class="w-full rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] px-4 py-3 outline-none cursor-pointer">
+              <option value="">Pilih Nama</option>
 
-                    <div>
-                        <h4 class="text-base font-semibold mb-2">Deskripsi (Opsional)</h4>
-                        <textarea name="description" rows="5"
-                            class="w-full rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] px-4 py-3 outline-none"
-                            placeholder="Tuliskan deskripsi project...">{{ old('description') }}</textarea>
-                    </div>
-                </section>
+              {{-- Kelompok "Saya" bila role-nya digital_banking --}}
+              @if($me && $me->role === 'digital_banking')
+                <optgroup label="Saya">
+                  <option value="{{ $me->id }}"
+                          {{ (string)old('digital_banking_id', $me->id) === (string)$me->id ? 'selected' : '' }}>
+                    {{ $me->name }} {{ $me->username ? '(' . $me->username . ')' : '' }}
+                  </option>
+                </optgroup>
+              @endif
+
+              {{-- Semua user digital_banking, hindari duplikasi "Saya" --}}
+              <optgroup label="Semua User Digital Banking">
+                @forelse(($digitalUsers ?? collect()) as $u)
+                  @continue($me && $me->role === 'digital_banking' && (string)$u->id === (string)$me->id)
+                  <option value="{{ $u->id }}"
+                          {{ (string)old('digital_banking_id', ($me && $me->role==='digital_banking') ? $me->id : '') === (string)$u->id ? 'selected' : '' }}>
+                    {{ $u->name }} {{ $u->username ? '(' . $u->username . ')' : '' }}
+                  </option>
+                @empty
+                  <option value="" disabled>Belum ada user role Digital Banking</option>
+                @endforelse
+              </optgroup>
+            </select>
+          </div>
+
+          <div>
+            <h4 class="text-base font-semibold mb-2">Penanggung Jawab (Developer / IT)</h4>
+            <select name="developer_id" required
+                    class="w-full rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] px-4 py-3 outline-none cursor-pointer">
+              <option value="">Pilih Nama</option>
+
+              {{-- Kelompok "Saya" bila role-nya it --}}
+              @if($me && $me->role === 'it')
+                <optgroup label="Saya">
+                  <option value="{{ $me->id }}"
+                          {{ (string)old('developer_id', $me->id) === (string)$me->id ? 'selected' : '' }}>
+                    {{ $me->name }} {{ $me->username ? '(' . $me->username . ')' : '' }}
+                  </option>
+                </optgroup>
+              @endif
+
+              {{-- Semua user IT, hindari duplikasi "Saya" --}}
+              <optgroup label="Semua User IT">
+                @forelse(($itUsers ?? collect()) as $u)
+                  @continue($me && $me->role === 'it' && (string)$u->id === (string)$me->id)
+                  <option value="{{ $u->id }}"
+                          {{ (string)old('developer_id', ($me && $me->role==='it') ? $me->id : '') === (string)$u->id ? 'selected' : '' }}>
+                    {{ $u->name }} {{ $u->username ? '(' . $u->username . ')' : '' }}
+                  </option>
+                @empty
+                  <option value="" disabled>Belum ada user role IT</option>
+                @endforelse
+              </optgroup>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <h4 class="text-base font-semibold mb-2">Deskripsi (Opsional)</h4>
+          <textarea name="description" rows="5"
+                    class="w-full rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] px-4 py-3 outline-none"
+                    placeholder="Tuliskan deskripsi project...">{{ old('description') }}</textarea>
+        </div>
+      </section>
 
                 <div class="flex justify-end gap-3 pt-2">
                     <button type="button" id="cancelNewProject"
