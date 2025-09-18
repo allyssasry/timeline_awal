@@ -58,11 +58,15 @@
 
 <main class="max-w-5xl mx-auto px-5 py-6">
   @php
-    // Filter hanya notifikasi yang pesannya dari IT
+    // Tampilkan HANYA notifikasi "progress_confirmed" yang berasal dari IT (dev=IT & confirmer=IT)
     $filteredToday = $today->filter(function($n){
-        $msg = strtolower($n->data['message'] ?? '');
-        return str_contains($msg, 'dikonfirmasi oleh it');
+        $d = $n->data ?? [];
+        return ($d['type']           ?? null) === 'progress_confirmed'
+            && ($d['developer_role'] ?? null) === 'it'
+            && ($d['by_role']        ?? null) === 'it'
+            && ($d['target_role']    ?? null) === 'digital_banking'; // opsional: pastikan target notifikasi untuk DIG
     });
+
     $filteredUnreadCount = $filteredToday->whereNull('read_at')->count();
   @endphp
 
@@ -78,7 +82,7 @@
   <div class="space-y-3">
     @forelse($filteredToday as $n)
       @php
-        $d   = $n->data;
+        $d    = $n->data;
         $late = $d['late'] ?? false;
       @endphp
       <div class="rounded-xl border border-[#E7C9C9] bg-white px-4 py-3 flex items-start gap-4 {{ $n->read_at ? '' : 'ring-2 ring-[#7A1C1C]/30' }}">

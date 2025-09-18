@@ -154,8 +154,30 @@ Route::put   ('/progresses/{progress}',        [ProgressController::class, 'upda
 Route::delete('/progresses/{progress}',        [ProgressController::class, 'destroy'])->name('progresses.destroy');
 Route::get('/dig/progresses', [ProjectController::class,'progresses'])->name('dig.progresses');
 
+
 Route::middleware('auth')->group(function () {
-    Route::get('/dig/notifications', [DigNotificationController::class, 'index'])->name('dig.notifications');
-    Route::post('/dig/notifications/read-all', [DigNotificationController::class, 'markAllRead'])->name('dig.notifications.readAll');
-    Route::post('/dig/notifications/{id}/read', [DigNotificationController::class, 'markRead'])->name('dig.notifications.read');
+    Route::get('/dig/notifications', function () {
+        $user  = auth()->user();
+        $today = $user->notifications()
+                      ->whereDate('created_at', now()->toDateString())
+                      ->latest()
+                      ->get();
+
+        // unread count keseluruhan (di Blade kita hitung lagi yang sudah difilter)
+        $unreadCount = $user->unreadNotifications()->count();
+
+        return view('dig.notifications', compact('today', 'unreadCount'));
+    })->name('dig.notifications');
+
+    Route::post('/dig/notifications/read-all', function () {
+        $u = auth()->user();
+        $u->unreadNotifications->markAsRead();
+        return back();
+    })->name('dig.notifications.readAll');
+
+    Route::post('/dig/notifications/{id}/read', function ($id) {
+        $n = auth()->user()->notifications()->where('id', $id)->firstOrFail();
+        if (is_null($n->read_at)) $n->markAsRead();
+        return back();
+    })->name('dig.notifications.read');
 });

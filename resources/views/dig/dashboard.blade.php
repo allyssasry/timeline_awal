@@ -57,8 +57,8 @@
             <nav class="hidden md:flex items-center gap-6 text-sm">
                 <a href="#beranda" class="font-semibold">Beranda</a>
                 <a href="{{ route('dig.progresses') }}" class="text-gray-600 hover:text-red-600">Progress</a> <a
-                    href="#" class="text-gray-600 hover:text-red-600">Notifikasi</a>
-                <a href="#" class="text-gray-600 hover:text-red-600">Arsip</a>
+                    href="{{ route('dig.notifications') }}" class="text-gray-600 hover:text-red-600">Notifikasi</a>
+                <a href="{{ route('arsip.arsip') }}" class="text-gray-600 hover:text-red-600">Arsip</a>
                 <span class="font-semibold text-red-600">DIG</span>
             </nav>
 
