@@ -18,41 +18,41 @@ class ProgressConfirmed extends Notification
 
     public function via($notifiable)
     {
-        return ['database'];
+        return ['database']; // langsung ke DB, tanpa queue
     }
 
     public function toDatabase($notifiable): array
     {
-        $p       = $this->progress;
+        $p       = $this->progress->loadMissing(['project.developer','project.digitalBanking','updates' => fn($q)=>$q->orderByDesc('update_date')]);
         $project = $p->project;
 
-        // status telat (opsional)
-        $late = false;
-        if ($p->end_date) {
-            $late = now()->toDateString() > $p->end_date;
-        }
+        $latest  = $p->updates->first();
+        $latestPercent = (int) ($latest->percent ?? $latest->progress_percent ?? 0);
+        $targetPercent = (int) $p->desired_percent;
 
-        // ambil metadata peran
-        $developerUser = optional($project)->developer;
-        $digitalUser   = optional($project)->digitalBanking;
+        $byRole = optional($this->confirmedBy)->role;
+        $message = $byRole === 'it'
+            ? 'Progress telah dikonfirmasi oleh IT'
+            : ($byRole === 'digital_banking' ? 'Progress telah dikonfirmasi oleh DIG' : 'Progress telah dikonfirmasi');
 
         return [
-            'type'           => 'progress_confirmed',    // untuk filter jenis notifikasi
-            'project_id'     => optional($project)->id,
-            'project_name'   => optional($project)->name,
+            // kunci yang difilter di Blade
+            'type'           => 'progress_confirmed',
+            'developer_role' => optional($project->developer)->role, // diharapkan 'it'
+            'by_role'        => $byRole,                             // 'it' saat IT konfirmasi
+            'target_role'    => 'digital_banking',
+
+            // info untuk tampilan
+            'project_id'     => $project?->id,
+            'project_name'   => $project?->name,
             'progress_id'    => $p->id,
             'progress_name'  => $p->name,
-
-            // metadata tentang siapa yang konfirmasi & peran siapa developer project
             'by_user_id'     => optional($this->confirmedBy)->id,
-            'by_role'        => optional($this->confirmedBy)->role,       // contoh: 'it'
-            'developer_id'   => optional($developerUser)->id,
-            'developer_role' => optional($developerUser)->role,           // contoh: 'it'
-            'target_role'    => 'digital_banking',                         // penonton halaman ini
-
-            // UI message
-            'message'        => 'Progress dikonfirmasi oleh IT.',
-            'late'           => $late,
+            'by_name'        => optional($this->confirmedBy)->name,
+            'message'        => $message,
+            'late'           => $latestPercent < $targetPercent,
+            'latest_percent' => $latestPercent,
+            'target_percent' => $targetPercent,
         ];
     }
 }

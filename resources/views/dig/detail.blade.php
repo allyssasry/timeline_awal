@@ -128,6 +128,11 @@
           $last = $pr->updates->sortByDesc('update_date')->first();
           $realisasi = $last ? (int)($last->percent ?? $last->progress_percent ?? 0) : 0;
           $canConfirm = $realisasi >= (int)$pr->desired_percent && !$pr->confirmed_at;
+
+          /* ⬇️ Tambahan penting: hanya pembuat progress yang boleh Edit/Hapus/Update/Konfirmasi */
+          $isOwner = (int)($pr->created_by ?? 0) === (int)auth()->id();
+          $creator = $pr->creator ?? null; // pastikan relasi creator() -> belongsTo(User::class,'created_by')
+          $ownerRoleLabel = optional($creator)->role === 'digital_banking' ? 'DIG' : (optional($creator)->role === 'it' ? 'IT' : '—');
         @endphp
 
         <section class="rounded-[16px] bg-[#E3BDBD]/60 border border-[#C99E9E] px-5 py-4">
@@ -142,16 +147,19 @@
             <div class="flex items-center gap-2">
               {{-- TOGGLE EDIT PROGRESS --}}
               <button type="button"
-                      class="px-3 py-1.5 text-xs rounded-lg border bg-white/70 hover:bg-white btn-edit-progress"
-                      data-target="editProgress-{{ $pr->id }}">
+                      class="px-3 py-1.5 text-xs rounded-lg border bg-white/70 hover:bg-white btn-edit-progress disabled:opacity-50"
+                      data-target="editProgress-{{ $pr->id }}"
+                      @unless($isOwner) disabled title="Hanya pembuat progress yang dapat mengedit" @endunless>
                 Edit
               </button>
+
               {{-- HAPUS PROGRESS --}}
               <form method="POST" action="{{ route('progresses.destroy', $pr->id) }}"
                     onsubmit="return confirm('Hapus progress ini? Tindakan tidak bisa dibatalkan.');">
                 @csrf
                 @method('DELETE')
-                <button class="px-3 py-1.5 text-xs rounded-lg border bg-white/70 hover:bg-white">
+                <button class="px-3 py-1.5 text-xs rounded-lg border bg-white/70 hover:bg-white disabled:opacity-50"
+                        @unless($isOwner) disabled title="Hanya pembuat progress yang dapat menghapus" @endunless>
                   Hapus
                 </button>
               </form>
@@ -163,7 +171,7 @@
                 <form method="POST" action="{{ route('progresses.confirm', $pr->id) }}">
                   @csrf
                   <button class="rounded-full bg-[#7A1C1C] text-white px-4 py-1 text-[12px] font-semibold disabled:opacity-50"
-                          {{ $canConfirm ? '' : 'disabled' }}>
+                          @unless($isOwner && $canConfirm) disabled title="{{ $isOwner ? 'Belum mencapai target' : 'Hanya pembuat progress yang dapat konfirmasi' }}" @endunless>
                     Konfirmasi
                   </button>
                 </form>
@@ -175,10 +183,21 @@
           <div class="grid md:grid-cols-[1fr,1fr,340px] gap-6">
             {{-- INFO TIMELINE + RIWAYAT CHIP --}}
             <div class="text-[13px] leading-6">
-              <div><span class="inline-block w-40 text-gray-700">Timeline Mulai</span> : {{ $pr->start_date }}</div>
-              <div><span class="inline-block w-40 text-gray-700">Timeline Selesai</span> : {{ $pr->end_date }}</div>
+              <<div><span class="inline-block w-40 text-gray-700">Timeline Mulai</span> :
+  {{ $pr->start_date ? \Illuminate\Support\Carbon::parse($pr->start_date)->timezone('Asia/Jakarta')->format('d M Y') : '-' }}
+</div>
+
+<div><span class="inline-block w-40 text-gray-700">Timeline Selesai</span> :
+  {{ $pr->end_date ? \Illuminate\Support\Carbon::parse($pr->end_date)->timezone('Asia/Jakarta')->format('d M Y') : '-' }}
+</div>
+
               <div><span class="inline-block w-40 text-gray-700">Target Progress</span> : {{ $pr->desired_percent }}%</div>
               <div><span class="inline-block w-40 text-gray-700">Realisasi Progress</span> : {{ $realisasi }}%</div>
+
+              {{-- Label pembuat progress --}}
+              <div class="mt-2 text-xs text-gray-600">
+                Dibuat oleh <b>{{ $ownerRoleLabel }}</b> — {{ $creator->name ?? '—' }}
+              </div>
 
               <div class="mt-3">
                 <div class="text-[12px] font-semibold text-gray-700 mb-1">Riwayat Progress Harian</div>
@@ -226,15 +245,19 @@
                   @csrf
                   @method('PUT')
                   <input name="name" value="{{ old('name', $pr->name) }}" required
-                         class="rounded-xl bg-[#F6EAEA] border border-[#C89898] px-3 py-2 text-[13px]" placeholder="Nama progress">
+                         class="rounded-xl bg-[#F6EAEA] border border-[#C89898] px-3 py-2 text-[13px]" placeholder="Nama progress"
+                         @unless($isOwner) disabled @endunless>
                   <div class="grid grid-cols-2 gap-2">
                     <input type="date" name="start_date" value="{{ old('start_date', $pr->start_date) }}" required
-                           class="rounded-xl bg-[#F6EAEA] border border-[#C89898] px-3 py-2 text-[13px]">
+                           class="rounded-xl bg-[#F6EAEA] border border-[#C89898] px-3 py-2 text-[13px]"
+                           @unless($isOwner) disabled @endunless>
                     <input type="date" name="end_date" value="{{ old('end_date', $pr->end_date) }}" required
-                           class="rounded-xl bg-[#F6EAEA] border border-[#C89898] px-3 py-2 text-[13px]">
+                           class="rounded-xl bg-[#F6EAEA] border border-[#C89898] px-3 py-2 text-[13px]"
+                           @unless($isOwner) disabled @endunless>
                   </div>
                   <select name="desired_percent" required
-                          class="rounded-xl bg-[#F6EAEA] border border-[#C89898] px-3 py-2 text-[13px]">
+                          class="rounded-xl bg-[#F6EAEA] border border-[#C89898] px-3 py-2 text-[13px]"
+                          @unless($isOwner) disabled @endunless>
                     @for ($x = 0; $x <= 100; $x += 5)
                       <option value="{{ $x }}" @selected((int)old('desired_percent', $pr->desired_percent) === $x)>{{ $x }}%</option>
                     @endfor
@@ -246,7 +269,8 @@
                              h-[40px] min-w-[160px] px-5
                              rounded-full border-2 border-[#7A1C1C]
                              bg-[#E2B9B9] hover:bg-[#D9AFAF]
-                             font-semibold text-sm whitespace-nowrap">
+                             font-semibold text-sm whitespace-nowrap disabled:opacity-50"
+                      @unless($isOwner) disabled title="Hanya pembuat progress yang dapat menyimpan perubahan" @endunless>
                       Simpan Perubahan
                     </button>
                   </div>
@@ -261,13 +285,17 @@
                        class="w-full rounded-[10px] bg-[#F6EAEA] border border-[#C89898] px-3 py-2 text-[13px]">
                 <div class="flex gap-2">
                   <input type="number" name="percent" min="0" max="100" placeholder="Progress %"
-                         class="w-full rounded-[10px] bg-[#F6EAEA] border border-[#C89898] px-3 py-2 text-[13px]" required>
-                  <button class="rounded-[10px] bg-[#7A1C1C] text-white px-4 py-2 text-[12px] font-semibold">Update</button>
+                         class="w-full rounded-[10px] bg-[#F6EAEA] border border-[#C89898] px-3 py-2 text-[13px]" required
+                         @unless($isOwner) disabled @endunless>
+                  <button class="rounded-[10px] bg-[#7A1C1C] text-white px-4 py-2 text-[12px] font-semibold disabled:opacity-50"
+                          @unless($isOwner) disabled title="Hanya pembuat progress yang dapat melakukan update" @endunless>
+                    Update
+                  </button>
                 </div>
               </form>
 
               {{-- TAMBAH CATATAN --}}
-              <div class="mt-4 text-[12px] text-gray-700 font-semibold mb-1">Tambah Catatan</div>
+              <div class="mt-4 text:[12px] text-[12px] text-gray-700 font-semibold mb-1">Tambah Catatan</div>
               <form method="POST" action="{{ route('progresses.notes.store', $pr->id) }}" class="space-y-2">
                 @csrf
                 <textarea name="body" rows="3" placeholder="Catatan"

@@ -181,3 +181,9 @@ Route::middleware('auth')->group(function () {
         return back();
     })->name('dig.notifications.read');
 });
+
+// routes/web.php (contoh)
+Route::get('/dig/notifications', [DigNotificationController::class, 'index'])->name('dig.notifications');
+Route::post('/dig/notifications/read-all', [DigNotificationController::class, 'markAllRead'])->name('dig.notifications.readAll');
+Route::post('/dig/notifications/{id}/read', [DigNotificationController::class, 'markRead'])->name('dig.notifications.read');
+

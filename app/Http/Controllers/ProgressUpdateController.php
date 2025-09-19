@@ -54,7 +54,9 @@ class ProgressUpdateController extends Controller
             'created_by'  => Auth::id(),
             'updated_by'  => Auth::id(),            // pastikan kolomnya sudah ada
         ]);
-
+if ($progress->created_by !== auth()->id()) {
+    abort(403);
+}
         return back()->with('success', 'Progress harian berhasil disimpan.');
     }
 

@@ -148,90 +148,118 @@
         </div>
 
         {{-- List progress per project (scrollable bila banyak) --}}
-        <div class="mt-4">
-          <div class="scroll-thin grid md:grid-cols-2 gap-4 max-h-[280px] overflow-y-auto pr-1">
-            @forelse($project->progresses as $pr)
-              @php
-                $last = $pr->updates->sortByDesc('update_date')->first();
-                $realisasi = $last ? (int)($last->percent ?? $last->progress_percent ?? 0) : 0;
-                $canConfirm = $realisasi >= (int)$pr->desired_percent && !$pr->confirmed_at;
-              @endphp
+         <div class="mt-4">
+                            <div class="scroll-thin grid md:grid-cols-2 gap-4 max-h-[280px] overflow-y-auto pr-1">
+                                @forelse($project->progresses as $pr)
+                                    @php
+                                        $last      = $pr->updates->sortByDesc('update_date')->first();
+                                        $realisasi = $last ? (int)($last->percent ?? $last->progress_percent ?? 0) : 0;
+                                        $canConfirmBase = $realisasi >= (int)$pr->desired_percent && !$pr->confirmed_at;
 
-              <div class="rounded-xl bg-[#E6CACA] p-4">
-                <div class="flex items-start justify-between mb-2">
-                  <div class="font-semibold">Progress {{ $loop->iteration }} — {{ $pr->name }}</div>
-                  <div class="flex gap-2">
-                    <button type="button"
-                            class="px-3 py-1.5 text-xs rounded-lg border bg-white/70 hover:bg-white"
-                            onclick="document.getElementById('editProgress-{{ $pr->id }}').classList.toggle('hidden')">
-                      Edit
-                    </button>
-                    <form method="POST" action="{{ route('progresses.destroy', $pr->id) }}"
-                          onsubmit="return confirm('Hapus progress ini?');">
-                      @csrf @method('DELETE')
-                      <button class="px-3 py-1.5 text-xs rounded-lg border bg-white/70 hover:bg-white">
-                        Hapus
-                      </button>
-                    </form>
-                  </div>
-                </div>
+                                        /*** PENAMBAHAN: Hanya PEMBUAT progress yang boleh update/konfirmasi ***/
+                                        $isOwner       = (int)($pr->created_by ?? 0) === (int)auth()->id();
+                                        $digCanUpdate  = $isOwner;                    // update hanya milik sendiri
+                                        $digCanConfirm = $isOwner && $canConfirmBase; // konfirmasi milik sendiri + syarat
 
-                <div class="text-sm grid gap-1 mb-3">
-                  <div><span class="inline-block w-36 text-gray-700">Timeline Mulai</span>: {{ $pr->start_date }}</div>
-                  <div><span class="inline-block w-36 text-gray-700">Timeline Selesai</span>: {{ $pr->end_date }}</div>
-                  <div><span class="inline-block w-36 text-gray-700">Target Progress</span>: {{ $pr->desired_percent }}%</div>
-                  <div><span class="inline-block w-36 text-gray-700">Realisasi Progress</span>: {{ $realisasi }}%</div>
-                </div>
+                                        // Info pembuat progress (untuk label keterangan)
+                                        $creator   = $pr->creator ?? null;
+                                        $role      = $creator?->role;
+                                        $ownerRoleLabel = $role === 'digital_banking' ? 'DIG' : ($role === 'it' ? 'IT' : '—');
+                                    @endphp
 
-                {{-- EDIT INLINE (hidden) --}}
-                <div id="editProgress-{{ $pr->id }}" class="hidden mb-3">
-                  <form method="POST" action="{{ route('progresses.update', $pr->id) }}"
-                        class="grid grid-cols-1 md:grid-cols-5 gap-2 bg-white/70 rounded-xl p-3 border">
-                    @csrf @method('PUT')
-                    <input name="name" value="{{ old('name', $pr->name) }}" required
-                           class="rounded-xl bg-white border px-3 py-2 outline-none md:col-span-2" placeholder="Nama progress">
-                    <input type="date" name="start_date" value="{{ old('start_date', $pr->start_date) }}" required
-                           class="rounded-xl bg-white border px-3 py-2 outline-none">
-                    <input type="date" name="end_date" value="{{ old('end_date', $pr->end_date) }}" required
-                           class="rounded-xl bg-white border px-3 py-2 outline-none">
-                    <select name="desired_percent" class="rounded-xl bg-white border px-3 py-2 outline-none" required>
-                      @for($i=0;$i<=100;$i+=5)
-                        <option value="{{ $i }}" @selected((int)old('desired_percent',$pr->desired_percent)===$i)>{{ $i }}%</option>
-                      @endfor
-                    </select>
-                    <button class="h-[40px] min-w-[140px] px-4 rounded-full border-2 border-[#7A1C1C] bg-[#E2B9B9] hover:bg-[#D9AFAF] text-sm font-semibold">
-                      Simpan Perubahan
-                    </button>
-                  </form>
-                </div>
+                                    <div class="rounded-xl bg-[#E6CACA] p-4">
+                                        <div class="flex items-start justify-between mb-2">
+                                            <div class="font-semibold">Progress {{ $loop->iteration }} — {{ $pr->name }}</div>
 
-                {{-- UPDATE HARIAN + KONFIRM --}}
-                <div class="flex items-center gap-2">
-                  <form method="POST" action="{{ route('progresses.updates.store', $pr->id) }}" class="flex flex-wrap gap-2">
-                    @csrf
-                    <input type="date" name="update_date" value="{{ now()->toDateString() }}"
-                           class="rounded-xl bg-white/80 border border-[#C89898] px-3 py-2 text-sm">
-                    <input type="number" name="percent" min="0" max="100" placeholder="%" required
-                           class="w-24 rounded-xl bg-white/80 border border-[#C89898] px-3 py-2 text-sm">
-                    <button class="rounded-xl border-2 border-[#7A1C1C] bg-[#E2B9B9] hover:bg-[#D9AFAF] px-3 py-2 text-xs font-semibold">
-                      Update Progress
-                    </button>
-                  </form>
+                                            <div class="flex gap-2">
+                                                {{-- Edit/Hapus hanya milik owner progress (TIDAK dihapus, hanya dipagari) --}}
+                                                @if($isOwner)
+                                                    <button type="button"
+                                                        class="px-3 py-1.5 text-xs rounded-lg border bg-white/70 hover:bg-white"
+                                                        onclick="document.getElementById('editProgress-{{ $pr->id }}').classList.toggle('hidden')">
+                                                        Edit
+                                                    </button>
+                                                    <form method="POST" action="{{ route('progresses.destroy', $pr->id) }}"
+                                                        onsubmit="return confirm('Hapus progress ini?');">
+                                                        @csrf @method('DELETE')
+                                                        <button class="px-3 py-1.5 text-xs rounded-lg border bg-white/70 hover:bg-white">
+                                                            Hapus
+                                                        </button>
+                                                    </form>
+                                                @endif
+                                            </div>
+                                        </div>
 
-                  <form method="POST" action="{{ route('progresses.confirm', $pr->id) }}">
-                    @csrf
-                    <button class="rounded-xl bg-[#7A1C1C] text-white px-4 py-2 text-xs font-semibold disabled:opacity-50"
-                            {{ $canConfirm ? '' : 'disabled' }}>
-                      Konfirmasi
-                    </button>
-                  </form>
-                </div>
-              </div>
-            @empty
-              <div class="col-span-2 text-sm text-gray-600">Belum ada progress.</div>
-            @endforelse
-          </div>
-        </div>
+                                        <div class="text-sm grid gap-1 mb-3">
+                                            <div><span class="inline-block w-36 text-gray-700">Timeline Mulai</span>: {{ $pr->start_date }}</div>
+                                            <div><span class="inline-block w-36 text-gray-700">Timeline Selesai</span>: {{ $pr->end_date }}</div>
+                                            <div><span class="inline-block w-36 text-gray-700">Target Progress</span>: {{ $pr->desired_percent }}%</div>
+                                            <div><span class="inline-block w-36 text-gray-700">Realisasi Progress</span>: {{ $realisasi }}%</div>
+                                        </div>
+
+                                        {{-- EDIT INLINE (hidden) --}}
+                                        <div id="editProgress-{{ $pr->id }}" class="hidden mb-3">
+                                            <form method="POST" action="{{ route('progresses.update', $pr->id) }}"
+                                                class="grid grid-cols-1 md:grid-cols-5 gap-2 bg-white/70 rounded-xl p-3 border">
+                                                @csrf @method('PUT')
+                                                <input name="name" value="{{ old('name', $pr->name) }}" required
+                                                    class="rounded-xl bg-white border px-3 py-2 outline-none md:col-span-2" placeholder="Nama progress"
+                                                    @unless($isOwner) disabled @endunless>
+                                                <input type="date" name="start_date" value="{{ old('start_date', $pr->start_date) }}" required
+                                                    class="rounded-xl bg-white border px-3 py-2 outline-none"
+                                                    @unless($isOwner) disabled @endunless>
+                                                <input type="date" name="end_date" value="{{ old('end_date', $pr->end_date) }}" required
+                                                    class="rounded-xl bg-white border px-3 py-2 outline-none"
+                                                    @unless($isOwner) disabled @endunless>
+                                                <select name="desired_percent" class="rounded-xl bg-white border px-3 py-2 outline-none" required
+                                                    @unless($isOwner) disabled @endunless>
+                                                    @for($i=0;$i<=100;$i+=5)
+                                                        <option value="{{ $i }}" @selected((int)old('desired_percent',$pr->desired_percent)===$i)>{{ $i }}%</option>
+                                                    @endfor
+                                                </select>
+                                                <button class="h-[40px] min-w-[140px] px-4 rounded-full border-2 border-[#7A1C1C] bg-[#E2B9B9] hover:bg-[#D9AFAF] text-xs font-semibold"
+                                                    @unless($isOwner) disabled @endunless>
+                                                    Simpan Perubahan
+                                                </button>
+                                            </form>
+                                        </div>
+
+                                        {{-- UPDATE HARIAN + KONFIRM --}}
+                                        <div class="flex items-center gap-2">
+                                            <form method="POST" action="{{ route('progresses.updates.store', $pr->id) }}" class="flex flex-wrap gap-2">
+                                                @csrf
+                                                <input type="date" name="update_date" value="{{ now()->toDateString() }}"
+                                                    class="rounded-xl bg-white/80 border border-[#C89898] px-3 py-2 text-sm"
+                                                    @unless($digCanUpdate) disabled @endunless>
+                                                <input type="number" name="percent" min="0" max="100" placeholder="%" required
+                                                    class="w-24 rounded-xl bg-white/80 border border-[#C89898] px-3 py-2 text-sm"
+                                                    @unless($digCanUpdate) disabled @endunless>
+                                                <button class="rounded-xl border-2 border-[#7A1C1C] bg-[#E2B9B9] hover:bg-[#D9AFAF] px-3 py-2 text-xs font-semibold"
+                                                    @unless($digCanUpdate) disabled @endunless>
+                                                    Update Progress
+                                                </button>
+                                            </form>
+
+                                            <form method="POST" action="{{ route('progresses.confirm', $pr->id) }}">
+                                                @csrf
+                                                <button class="rounded-xl bg-[#7A1C1C] text-white px-4 py-2 text-xs font-semibold disabled:opacity-50"
+                                                    @unless($digCanConfirm) disabled @endunless>
+                                                    Konfirmasi
+                                                </button>
+                                            </form>
+                                        </div>
+
+                                        @unless($isOwner)
+                                            <p class="mt-2 text-xs text-gray-600">
+                                                *Progress ini dibuat oleh <strong>{{ $ownerRoleLabel }}</strong> — {{ $creator?->name ?? '—' }}. Anda hanya dapat melihat tanpa mengubah.
+                                            </p>
+                                        @endunless
+                                    </div>
+                                @empty
+                                    <div class="col-span-2 text-sm text-gray-600">Belum ada progress.</div>
+                                @endforelse
+                            </div>
+                        </div>
 
         <div class="mt-3 flex justify-end">
           <a href="{{ route('dig.projects.show', $project->id) }}"
