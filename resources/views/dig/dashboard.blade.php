@@ -251,14 +251,24 @@
                             <div class="scroll-thin grid md:grid-cols-2 gap-4 max-h-[280px] overflow-y-auto pr-1">
                                 @forelse($project->progresses as $pr)
                                     @php
-                                        $last      = $pr->updates->sortByDesc('update_date')->first();
-                                        $realisasi = $last ? (int)($last->percent ?? $last->progress_percent ?? 0) : 0;
-                                        $canConfirmBase = $realisasi >= (int)$pr->desired_percent && !$pr->confirmed_at;
+                                        $last           = $pr->updates->sortByDesc('update_date')->first();
+                                        $realisasi      = $last ? (int)($last->percent ?? $last->progress_percent ?? 0) : 0;
 
-                                        /*** PENAMBAHAN: Hanya PEMBUAT progress yang boleh update/konfirmasi ***/
-                                        $isOwner       = (int)($pr->created_by ?? 0) === (int)auth()->id();
-                                        $digCanUpdate  = $isOwner;                    // update hanya milik sendiri
-                                        $digCanConfirm = $isOwner && $canConfirmBase; // konfirmasi milik sendiri + syarat
+                                        // hanya owner progress
+                                        $isOwner        = (int)($pr->created_by ?? 0) === (int)auth()->id();
+
+                                        // status konfirmasi
+                                        $alreadyConfirmed = !is_null($pr->confirmed_at);
+
+                                        // role user sekarang
+                                        $isDig          = auth()->user()?->role === 'digital_banking';
+
+                                        // aturan: Update hanya DIG + owner + belum confirmed
+                                        $canUpdate      = $isOwner && $isDig && !$alreadyConfirmed;
+
+                                        // aturan: Konfirmasi hanya owner, sudah capai target, dan belum confirmed
+                                        $canConfirmBase = $realisasi >= (int)$pr->desired_percent && !$alreadyConfirmed;
+                                        $canConfirm     = $isOwner && $canConfirmBase;
 
                                         // Info pembuat progress (untuk label keterangan)
                                         $creator   = $pr->creator ?? null;
@@ -323,29 +333,53 @@
                                             </form>
                                         </div>
 
-                                        {{-- UPDATE HARIAN + KONFIRM --}}
-                                        <div class="flex items-center gap-2">
-                                            <form method="POST" action="{{ route('progresses.updates.store', $pr->id) }}" class="flex flex-wrap gap-2">
+                                        {{-- UPDATE PROGRESS + KONFIRMASI (Konfirmasi di bawah) --}}
+                                        <div class="mt-3">
+                                            {{-- UPDATE PROGRESS --}}
+                                            <form method="POST" action="{{ route('progresses.updates.store', $pr->id) }}" class="flex flex-wrap gap-3 items-center">
                                                 @csrf
-                                                <input type="date" name="update_date" value="{{ now()->toDateString() }}"
-                                                    class="rounded-xl bg-white/80 border border-[#C89898] px-3 py-2 text-sm"
-                                                    @unless($digCanUpdate) disabled @endunless>
-                                                <input type="number" name="percent" min="0" max="100" placeholder="%" required
-                                                    class="w-24 rounded-xl bg-white/80 border border-[#C89898] px-3 py-2 text-sm"
-                                                    @unless($digCanUpdate) disabled @endunless>
-                                                <button class="rounded-xl border-2 border-[#7A1C1C] bg-[#E2B9B9] hover:bg-[#D9AFAF] px-3 py-2 text-xs font-semibold"
-                                                    @unless($digCanUpdate) disabled @endunless>
+                                                <input
+                                                    type="date"
+                                                    name="update_date"
+                                                    value="{{ now()->toDateString() }}"
+                                                    class="rounded-xl border px-3 py-2 text-sm"
+                                                    @unless($canUpdate) disabled @endunless
+                                                >
+                                                <input
+                                                    type="number"
+                                                    name="percent"
+                                                    min="0" max="100" placeholder="%"
+                                                    class="rounded-xl border px-3 py-2 text-sm w-28"
+                                                    @unless($canUpdate) disabled @endunless
+                                                    required
+                                                >
+                                                <button
+                                                    class="rounded-xl bg-[#7A1C1C] text-white px-4 py-2 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    @unless($canUpdate) disabled title="{{ $alreadyConfirmed ? 'Sudah dikonfirmasi' : ($isOwner ? 'Hanya DIG yang bisa update' : 'Bukan pembuat progress') }}" @endunless
+                                                >
                                                     Update Progress
                                                 </button>
                                             </form>
 
-                                            <form method="POST" action="{{ route('progresses.confirm', $pr->id) }}">
-                                                @csrf
-                                                <button class="rounded-xl bg-[#7A1C1C] text-white px-4 py-2 text-xs font-semibold disabled:opacity-50"
-                                                    @unless($digCanConfirm) disabled @endunless>
-                                                    Konfirmasi
-                                                </button>
-                                            </form>
+                                            {{-- KONFIRMASI (DI BAWAH UPDATE) --}}
+                                            <div class="mt-2">
+                                                @if(!$alreadyConfirmed)
+                                                    <form method="POST" action="{{ route('progresses.confirm', $pr->id) }}">
+                                                        @csrf
+                                                        <button
+                                                            class="rounded-xl bg-green-700 text-white px-4 py-2 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            {{ $canConfirm ? '' : 'disabled' }}
+                                                            title="{{ $isOwner ? 'Belum mencapai target' : 'Hanya pembuat progress yang dapat konfirmasi' }}"
+                                                        >
+                                                            Konfirmasi
+                                                        </button>
+                                                    </form>
+                                                @else
+                                                    <span class="inline-flex items-center rounded-full bg-green-100 text-green-700 px-3 py-1 text-xs font-semibold">
+                                                        Sudah dikonfirmasi
+                                                    </span>
+                                                @endif
+                                            </div>
                                         </div>
 
                                         @unless($isOwner)

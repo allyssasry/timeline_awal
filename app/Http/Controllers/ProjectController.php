@@ -54,11 +54,11 @@ class ProjectController extends Controller
     /**
      * Simpan project baru + daftar progress awal
      * Hanya user dengan role digital_banking yang boleh membuat project.
-     * Redirect ke dashboard DIG (projects.index) dengan flash success.
+     * Setelah tersimpan, kirim notifikasi ke anak IT (developer_id) bahwa DIG membuat project.
      */
     public function store(Request $request)
     {
-        // === Tambahan dari snippet: batasi hanya Digital Banking ===
+        // === Batasi hanya Digital Banking ===
         if (auth()->user()?->role !== 'digital_banking') {
             abort(403, 'Hanya Digital Banking yang dapat membuat project.');
         }
@@ -93,6 +93,44 @@ class ProjectController extends Controller
                 'start_date' => $p['start_date'],
                 'end_date' => $p['end_date'],
                 'desired_percent' => $p['desired_percent'],
+            ]);
+        }
+
+        /**
+         * =========================
+         * KIRIM NOTIFIKASI KE IT
+         * =========================
+         * Format data mengikuti pola yang sudah dipakai di notifikasi DIG sebelumnya:
+         * - type          : "dig_project_created"
+         * - by_role       : "digital_banking"
+         * - target_role   : "it"
+         * - project_*     : informasi dasar project
+         * - message       : ringkas untuk ditampilkan di UI IT
+         *
+         * Catatan: kita membuat database notification langsung via relasi
+         * $developer->notifications()->create([...]).
+         * Kolom "type" bebas (string), di sini pakai "app.dig".
+         */
+        $developer = User::find($project->developer_id);
+        if ($developer) {
+            $payload = [
+                'type'              => 'dig_project_created',
+                'by_role'           => 'digital_banking',
+                'target_role'       => 'it',
+                'project_id'        => $project->id,
+                'project_name'      => $project->name,
+                'digital_banking_id'=> $project->digital_banking_id,
+                'developer_id'      => $project->developer_id,
+                'message'           => 'Digital Banking Membuat Project',
+                'created_by'        => (int) Auth::id(),
+                // field opsional yang kadang dipakai di blade lain
+                'late'              => false,
+            ];
+
+            // simpan sebagai Database Notification
+            $developer->notifications()->create([
+                'type' => 'app.dig', // penanda generik (tidak harus class Notif)
+                'data' => $payload,
             ]);
         }
 

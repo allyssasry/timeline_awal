@@ -13,7 +13,32 @@ use App\Http\Controllers\ProgressUpdateController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProgressNoteController;
 use App\Http\Controllers\DigNotificationController;
+use App\Http\Controllers\ItNotificationController;
 
+
+// IT
+Route::get('/it/notifications', [ItNotificationController::class, 'index'])
+    ->name('it.notifications')
+    ->middleware('auth');
+
+Route::post('/it/notifications/read-all', [ItNotificationController::class, 'markAllRead'])
+    ->name('it.notifications.readAll')
+    ->middleware('auth');
+
+Route::post('/it/notifications/{id}/read', [ItNotificationController::class, 'markRead'])
+    ->name('it.notifications.read')
+    ->middleware('auth');
+
+// DIG (kalau ada)
+Route::get('/dig/notifications', [DigNotificationController::class, 'index'])
+    ->name('dig.notifications')
+    ->middleware('auth');
+Route::post('/dig/notifications/read-all', [DigNotificationController::class, 'markAllRead'])
+    ->name('dig.notifications.readAll')
+    ->middleware('auth');
+Route::post('/dig/notifications/{id}/read', [DigNotificationController::class, 'markRead'])
+    ->name('dig.notifications.read')
+    ->middleware('auth');
 
 
 
