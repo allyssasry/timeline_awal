@@ -16,33 +16,60 @@
 </head>
 <body class="min-h-screen bg-[#F8ECEC] text-gray-900">
 
-  {{-- NAVBAR ringkas --}}
+  @php
+    $user      = auth()->user();
+    $role      = $user?->role; // 'digital_banking' atau 'it'
+    $roleLabel = strtoupper($role === 'it' ? 'Developer' : 'DIG');
+
+    // Tentukan rute sesuai role dengan aman (pakai fallback kalau rute IT belum ada)
+    $homeUrl = ($role === 'it'  && \Illuminate\Support\Facades\Route::has('it.dashboard'))
+                ? route('it.dashboard') : route('dig.dashboard');
+
+    $progressUrl = ($role === 'it' && \Illuminate\Support\Facades\Route::has('it.progresses'))
+                   ? route('it.progresses') : route('dig.progresses');
+
+    $notifUrl = ($role === 'it' && \Illuminate\Support\Facades\Route::has('it.notifications'))
+                ? route('it.notifications') : route('dig.notifications');
+
+    // Rute Arsip – gunakan yang tersedia. Prioritaskan 'semua.arsip' jika ada.
+    $arsipUrl = \Illuminate\Support\Facades\Route::has('semua.arsip')
+               ? route('semua.arsip')
+               : ( \Illuminate\Support\Facades\Route::has('arsip.arsip') ? route('arsip.arsip') : url()->current() );
+
+    // Helper untuk memberi kelas aktif pada link
+    $isActive = function(string $url) {
+        return url()->current() === $url ? 'font-semibold text-red-600' : 'text-gray-600 hover:text-red-600';
+    };
+  @endphp
+
   <header class="sticky top-0 z-30 bg-[#F8ECEC]/90 backdrop-blur border-b">
     <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
       <div class="flex items-center gap-2">
-        <img src="https://website-api.bankdki.co.id/integrations/storage/page-meta-data/007UlZbO3Oe6PivLltdFiQax6QH5kWDvb0cKPdn4.png" class="h-8" alt="Bank Jakarta" />
+        <img src="https://website-api.bankdki.co.id/integrations/storage/page-meta-data/007UlZbO3Oe6PivLltdFiQax6QH5kWDvb0cKPdn4.png"
+             class="h-8" alt="Bank Jakarta" />
       </div>
-      <nav class="hidden md:flex items-center gap-6 text-sm">
-        <a href="{{ route('dig.dashboard') }}" class="text-gray-600 hover:text-red-600">Beranda</a>
-        <a href="{{ route('dig.progresses') }}" class="text-gray-600 hover:text-red-600">Progress</a>
-        <a href="{{ route('dig.notifications') }}" class="text-gray-600 hover:text-red-600">Notifikasi</a>
-        <span class="font-semibold text-red-600">Arsip</span>
-        <span class="font-semibold text-red-600">DIG</span>
 
+      {{-- NAVBAR – semua link selalu terlihat, diarahkan sesuai role --}}
+      <nav class="hidden md:flex items-center gap-6 text-sm">
+        <a href="{{ $homeUrl }}" class="{{ $isActive($homeUrl) }}">Beranda</a>
+        <a href="{{ $progressUrl }}" class="{{ $isActive($progressUrl) }}">Progress</a>
+        <a href="{{ $notifUrl }}" class="{{ $isActive($notifUrl) }}">Notifikasi</a>
+        <a href="{{ $arsipUrl }}" class="{{ $isActive($arsipUrl) }}">Arsip</a>
+        <span class="font-semibold text-red-600">{{ $roleLabel }}</span>
       </nav>
 
-       <div class="relative">
-                <button id="menuBtn" class="p-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M3 3h6v6H3V3zm12 0h6v6h-6V3zM3 15h6v6H3v-6zm12 0h6v6h-6v-6z" />
-                    </svg>
-                </button>
-                <div id="menuPanel"
-                    class="hidden absolute right-0 mt-2 w-48 rounded-xl shadow-lg bg-[#7A1C1C] text-white overflow-hidden">
-                    <a href="#" class="block px-4 py-3 hover:bg-[#6a1717]">Pengaturan Akun</a>
-                    <a href="/logout" class="block px-4 py-3 hover:bg-[#6a1717]">Log Out</a>
-                </div>
+      <div class="relative">
+        <button id="menuBtn" class="p-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 3h6v6H3V3zm12 0h6v6h-6V3zM3 15h6v6H3v-6zm12 0h6v6h-6v-6z" />
+          </svg>
+        </button>
+        <div id="menuPanel"
+             class="hidden absolute right-0 mt-2 w-48 rounded-xl shadow-lg bg-[#7A1C1C] text-white overflow-hidden">
+          <a href="#" class="block px-4 py-3 hover:bg-[#6a1717]">Pengaturan Akun</a>
+          <a href="/logout" class="block px-4 py-3 hover:bg-[#6a1717]">Log Out</a>
         </div>
+      </div>
     </div>
   </header>
 
@@ -84,15 +111,14 @@
     {{-- Daftar Arsip --}}
     @forelse ($projects as $project)
       @php
-        // Ring persen realisasi = rata-rata update terbaru tiap progress
         $latestPercents = [];
         foreach ($project->progresses as $pr) {
-          $last = $pr->updates->first(); // diasumsikan sudah eager load & sort desc di controller
+          $last = $pr->updates->first();
           $latestPercents[] = $last ? (int)($last->progress_percent ?? ($last->percent ?? 0)) : 0;
         }
         $realization = count($latestPercents) ? (int) round(array_sum($latestPercents)/max(count($latestPercents),1)) : 0;
         $size=90; $stroke=12; $r=$size/2-$stroke; $circ=2*M_PI*$r; $off=$circ*(1-$realization/100);
-  $finishedAt = $project->finished_at_calc ?? $project->updated_at; // gunakan accessor baru
+        $finishedAt = $project->finished_at_calc ?? $project->updated_at;
       @endphp
 
       <section class="rounded-2xl border-2 border-[#7A1C1C] bg-[#F2DCDC] p-5 mb-6">
@@ -176,14 +202,15 @@
       <div class="mt-6">{{ $projects->withQueryString()->links() }}</div>
     @endif
   </main>
+
   <script>
-        // dropdown
-        const menuBtn = document.getElementById('menuBtn');
-        const menuPanel = document.getElementById('menuPanel');
-        menuBtn?.addEventListener('click', () => menuPanel.classList.toggle('hidden'));
-        document.addEventListener('click', (e) => {
-            if (!menuBtn?.contains(e.target) && !menuPanel?.contains(e.target)) menuPanel?.classList.add('hidden');
-        });
+    // dropdown
+    const menuBtn = document.getElementById('menuBtn');
+    const menuPanel = document.getElementById('menuPanel');
+    menuBtn?.addEventListener('click', () => menuPanel.classList.toggle('hidden'));
+    document.addEventListener('click', (e) => {
+      if (!menuBtn?.contains(e.target) && !menuPanel?.contains(e.target)) menuPanel?.classList.add('hidden');
+    });
   </script>
 </body>
 </html>

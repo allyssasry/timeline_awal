@@ -121,8 +121,8 @@ Route::middleware('auth')->get('/arsip', function (Request $r) {
         ['path' => $r->url(), 'query' => $r->query()]
     );
 
-    return view('arsip.arsip', ['projects' => $paged]);
-})->name('arsip.arsip');
+    return view('semua.arsip', ['projects' => $paged]);
+})->name('semua.arsip');
 
 Route::get('/dig/projects/{project}', [ProjectController::class, 'show'])
     ->name('dig.projects.show');

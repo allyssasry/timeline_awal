@@ -22,7 +22,7 @@
         <a href="{{ url('/it/dashboard') }}" class="text-gray-600 hover:text-red-600">Beranda</a>
         <a href="{{ route('dig.progresses') }}" class="text-gray-600 hover:text-red-600">Progress</a>
         <a href="{{ route('it.notifications') }}" class="font-semibold">Notifikasi</a>
-        <a href="{{ route('arsip.arsip') }}" class="text-gray-600 hover:text-red-600">Arsip</a>
+        <a href="{{ route('semua.arsip') }}" class="text-gray-600 hover:text-red-600">Arsip</a>
         <span class="font-semibold text-red-600">IT</span>
       </nav>
       <div></div>
