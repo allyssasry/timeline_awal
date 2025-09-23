@@ -35,7 +35,7 @@
 
             <nav class="hidden md:flex items-center gap-6 text-sm">
                 <a href="#beranda" class="font-semibold">Beranda</a>
-                <a href="{{ route('dig.progresses') }}" class="text-gray-600 hover:text-red-600">Progress</a>
+                <a href="{{ route('semua.progresses') }}" class="text-gray-600 hover:text-red-600">Progress</a>
                 <a href="{{ route('dig.notifications') }}" class="text-gray-600 hover:text-red-600">Notifikasi</a>
                 <a href="{{ route('semua.arsip') }}" class="text-gray-600 hover:text-red-600">Arsip</a>
                 <span class="font-semibold text-red-600">DIG</span>
@@ -299,12 +299,26 @@
                                             </div>
                                         </div>
 
-                                        <div class="text-sm grid gap-1 mb-3">
-                                            <div><span class="inline-block w-36 text-gray-700">Timeline Mulai</span>: {{ $pr->start_date }}</div>
-                                            <div><span class="inline-block w-36 text-gray-700">Timeline Selesai</span>: {{ $pr->end_date }}</div>
-                                            <div><span class="inline-block w-36 text-gray-700">Target Progress</span>: {{ $pr->desired_percent }}%</div>
-                                            <div><span class="inline-block w-36 text-gray-700">Realisasi Progress</span>: {{ $realisasi }}%</div>
-                                        </div>
+                                      <div class="mt-2 text-sm">
+                    <div class="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1">
+                      <span>Timeline Mulai</span>
+                      <span>:
+                        {{ $pr->start_date
+                           ? \Illuminate\Support\Carbon::parse($pr->start_date)->timezone('Asia/Jakarta')->format('d M Y')
+                           : '-' }}
+                      </span>
+
+                      <span>Timeline Selesai</span>
+                      <span>:
+                        {{ $pr->end_date
+                           ? \Illuminate\Support\Carbon::parse($pr->end_date)->timezone('Asia/Jakarta')->format('d M Y')
+                           : '-' }}
+                      </span>
+
+                      <span>Target Progress</span>    <span>: {{ (int)$pr->desired_percent }}%</span>
+                      <span>Realisasi Progress</span> <span>: {{ $realisasi }}%</span>
+                    </div>
+                  </div>
 
                                         {{-- EDIT INLINE (hidden) --}}
                                         <div id="editProgress-{{ $pr->id }}" class="hidden mb-3">

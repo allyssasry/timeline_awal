@@ -25,7 +25,7 @@
 
       <nav class="hidden md:flex items-center gap-6 text-sm">
         <a href="#beranda" class="font-semibold">Beranda</a>
-        <a href="{{ route('dig.progresses') }}" class="text-gray-600 hover:text-red-600">Progress</a>
+        <a href="{{ route('semua.progresses') }}" class="text-gray-600 hover:text-red-600">Progress</a>
         <a href="{{ route('it.notifications') }}" class="text-gray-600 hover:text-red-600">Notifikasi</a>
         <a href="{{ route('semua.arsip') }}" class="text-gray-600 hover:text-red-600">Arsip</a>
         <span class="font-semibold text-red-600">Developer</span>
@@ -125,17 +125,18 @@
               </div>
             </div>
 
-            {{-- Tombol Tambah Progress (khusus IT/dev project) --}}
-            @if ($isProjectDev)
-              <div class="shrink-0 flex justify-end">
-                <button type="button"
-                        class="btn-toggle-progress inline-flex items-center gap-2 rounded-xl bg-[#7A1C1C] text-white px-4 py-2 text-sm font-semibold shadow hover:bg-[#6a1717]"
-                        data-target="progressForm-{{ $project->id }}">
-                  <span class="grid place-items-center w-6 h-6 rounded-full bg-white/20 text-white">+</span>
-                  Tambah Progress
-                </button>
-              </div>
-            @endif
+       {{-- Tombol Tambah Progress (khusus IT/dev project) - LETAK LEBIH KE BAWAH --}}
+@if ($isProjectDev)
+  <div class="col-span-full mt-4 md:mt-6 flex justify-end">
+    <button type="button"
+            class="btn-toggle-progress inline-flex items-center gap-2 rounded-xl bg-[#7A1C1C] text-white px-4 py-2 text-sm font-semibold shadow hover:bg-[#6a1717]"
+            data-target="progressForm-{{ $project->id }}">
+      <span class="grid place-items-center w-6 h-6 rounded-full bg-white/20 text-white">+</span>
+      Tambah Progress
+    </button>
+  </div>
+@endif
+
           </div>
 
           {{-- FORM TAMBAH PROGRESS (HIDDEN) --}}

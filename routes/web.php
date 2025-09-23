@@ -177,7 +177,7 @@ Route::resource('projects', ProjectController::class)->only(['edit','update','de
 Route::get   ('/progresses/{progress}/edit',   [ProgressController::class, 'edit'])->name('progresses.edit');   // optional kalau mau halaman edit terpisah
 Route::put   ('/progresses/{progress}',        [ProgressController::class, 'update'])->name('progresses.update');
 Route::delete('/progresses/{progress}',        [ProgressController::class, 'destroy'])->name('progresses.destroy');
-Route::get('/dig/progresses', [ProjectController::class,'progresses'])->name('dig.progresses');
+Route::get('/semua/progresses', [ProjectController::class,'progresses'])->name('semua.progresses');
 
 
 Route::middleware('auth')->group(function () {
@@ -212,3 +212,18 @@ Route::get('/dig/notifications', [DigNotificationController::class, 'index'])->n
 Route::post('/dig/notifications/read-all', [DigNotificationController::class, 'markAllRead'])->name('dig.notifications.readAll');
 Route::post('/dig/notifications/{id}/read', [DigNotificationController::class, 'markRead'])->name('dig.notifications.read');
 
+// DIG
+Route::get('/dig/notifications', [\App\Http\Controllers\DigNotificationController::class, 'index'])
+    ->name('dig.notifications');
+Route::post('/dig/notifications/read/{id}', [\App\Http\Controllers\DigNotificationController::class, 'markRead'])
+    ->name('dig.notifications.read');
+Route::post('/dig/notifications/read-all', [\App\Http\Controllers\DigNotificationController::class, 'markAllRead'])
+    ->name('dig.notifications.readAll');
+
+// IT
+Route::get('/it/notifications', [\App\Http\Controllers\DigNotificationController::class, 'itIndex'])
+    ->name('it.notifications');
+Route::post('/it/notifications/read/{id}', [\App\Http\Controllers\DigNotificationController::class, 'itMarkRead'])
+    ->name('it.notifications.read');
+Route::post('/it/notifications/read-all', [\App\Http\Controllers\DigNotificationController::class, 'itMarkAllRead'])
+    ->name('it.notifications.readAll');

@@ -17,16 +17,16 @@
 <body class="min-h-screen bg-[#F8ECEC] text-gray-900">
 
   @php
-    $user      = auth()->user();
-    $role      = $user?->role; // 'digital_banking' atau 'it'
-    $roleLabel = strtoupper($role === 'it' ? 'Developer' : 'DIG');
+  $user      = auth()->user();
+  $role      = $user?->role; // 'digital_banking' atau 'it'
+  $roleLabel = $role === 'it' ? 'Developer' : 'DIG'; // ← tanpa strtoupper
 
     // Tentukan rute sesuai role dengan aman (pakai fallback kalau rute IT belum ada)
     $homeUrl = ($role === 'it'  && \Illuminate\Support\Facades\Route::has('it.dashboard'))
                 ? route('it.dashboard') : route('dig.dashboard');
 
     $progressUrl = ($role === 'it' && \Illuminate\Support\Facades\Route::has('it.progresses'))
-                   ? route('it.progresses') : route('dig.progresses');
+                   ? route('semua.progresses') : route('semua.progresses');
 
     $notifUrl = ($role === 'it' && \Illuminate\Support\Facades\Route::has('it.notifications'))
                 ? route('it.notifications') : route('dig.notifications');
@@ -38,7 +38,7 @@
 
     // Helper untuk memberi kelas aktif pada link
     $isActive = function(string $url) {
-        return url()->current() === $url ? 'font-semibold text-red-600' : 'text-gray-600 hover:text-red-600';
+        return url()->current() === $url ? 'font-semibold' : 'text-gray-600 hover:text-red-600';
     };
   @endphp
 

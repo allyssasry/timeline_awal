@@ -6,6 +6,7 @@ use App\Models\Project;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str; // ⬅️ penting untuk UUID notifikasi
 
 class ProjectController extends Controller
 {
@@ -34,10 +35,12 @@ class ProjectController extends Controller
             'digitalBanking:id,name,username',
             'developer:id,name,username',
             'progresses' => function ($q) {
-                $q->with(['updates' => fn($uq) => $uq->latest() ]);
+             $q->with([
+            'creator:id,name,role',               // ⬅️ ini penting
+            'updates' => fn($uq) => $uq->latest()
+             ]);
             },
-        ])
-        ->latest()
+         ]) ->latest()
         ->get();
 
         $digitalUsers = User::where('role', 'digital_banking')
@@ -58,7 +61,7 @@ class ProjectController extends Controller
      */
     public function store(Request $request)
     {
-        // === Batasi hanya Digital Banking ===
+        // Batasi hanya Digital Banking
         if (auth()->user()?->role !== 'digital_banking') {
             abort(403, 'Hanya Digital Banking yang dapat membuat project.');
         }
@@ -79,20 +82,21 @@ class ProjectController extends Controller
 
         // Buat project
         $project = Project::create([
-            'name' => $data['name'],
-            'description' => $data['description'] ?? null,
-            'created_by' => Auth::id(),
+            'name'               => $data['name'],
+            'description'        => $data['description'] ?? null,
+            'created_by'         => Auth::id(),
             'digital_banking_id' => $data['digital_banking_id'],
-            'developer_id' => $data['developer_id'],
+            'developer_id'       => $data['developer_id'],
         ]);
 
         // Buat daftar progress awal
         foreach ($data['progresses'] as $p) {
             $project->progresses()->create([
-                'name' => $p['name'],
-                'start_date' => $p['start_date'],
-                'end_date' => $p['end_date'],
+                'name'            => $p['name'],
+                'start_date'      => $p['start_date'],
+                'end_date'        => $p['end_date'],
                 'desired_percent' => $p['desired_percent'],
+                'created_by'      => Auth::id(),   // ⬅️ WAJIB diisi
             ]);
         }
 
@@ -100,37 +104,32 @@ class ProjectController extends Controller
          * =========================
          * KIRIM NOTIFIKASI KE IT
          * =========================
-         * Format data mengikuti pola yang sudah dipakai di notifikasi DIG sebelumnya:
-         * - type          : "dig_project_created"
-         * - by_role       : "digital_banking"
-         * - target_role   : "it"
-         * - project_*     : informasi dasar project
-         * - message       : ringkas untuk ditampilkan di UI IT
-         *
-         * Catatan: kita membuat database notification langsung via relasi
-         * $developer->notifications()->create([...]).
-         * Kolom "type" bebas (string), di sini pakai "app.dig".
+         * Format data mengikuti pola yang kamu pakai:
+         * - type        : "dig_project_created"
+         * - by_role     : "digital_banking"
+         * - target_role : "it"
          */
         $developer = User::find($project->developer_id);
         if ($developer) {
             $payload = [
-                'type'              => 'dig_project_created',
-                'by_role'           => 'digital_banking',
-                'target_role'       => 'it',
-                'project_id'        => $project->id,
-                'project_name'      => $project->name,
-                'digital_banking_id'=> $project->digital_banking_id,
-                'developer_id'      => $project->developer_id,
-                'message'           => 'Digital Banking Membuat Project',
-                'created_by'        => (int) Auth::id(),
-                // field opsional yang kadang dipakai di blade lain
-                'late'              => false,
+                'type'               => 'dig_project_created',
+                'by_role'            => 'digital_banking',
+                'target_role'        => 'it',
+                'project_id'         => $project->id,
+                'project_name'       => $project->name,
+                'digital_banking_id' => (string) $project->digital_banking_id,
+                'developer_id'       => (string) $project->developer_id,
+                'message'            => 'Digital Banking Membuat Project',
+                'created_by'         => (int) Auth::id(),
+                'late'               => false,
             ];
 
-            // simpan sebagai Database Notification
+            // Penting: isi kolom 'id' dengan UUID agar tidak error default value
             $developer->notifications()->create([
-                'type' => 'app.dig', // penanda generik (tidak harus class Notif)
+                'id'   => (string) Str::uuid(), // ⬅️ mencegah error "Field 'id' doesn't have a default value"
+                'type' => 'app.dig',
                 'data' => $payload,
+                // notifiable_id & notifiable_type otomatis terisi dari relasi
             ]);
         }
 
@@ -139,34 +138,30 @@ class ProjectController extends Controller
             ->with('success', 'Project berhasil dibuat.');
     }
 
-    /**
-     * Detail project (halaman terpisah).
-     */
+    /** Detail project */
     public function show(Project $project)
     {
         // load relasi agar detail lengkap
         $project->load(['progresses.updates', 'digitalBanking', 'developer', 'creator']);
-
         return view('dig.detail', compact('project'));
     }
 
     public function edit(Project $project)
     {
-        // kalau kamu butuh daftar user DIG/IT untuk select:
-        $digitalUsers = \App\Models\User::where('role', 'digital_banking')->get();
-        $itUsers = \App\Models\User::where('role', 'it')->get();
+        $digitalUsers = User::where('role', 'digital_banking')->get();
+        $itUsers      = User::where('role', 'it')->get();
 
         return view('projects.edit', compact('project', 'digitalUsers', 'itUsers'));
     }
 
-    // SIMPAN PERUBAHAN
+    /** Simpan perubahan */
     public function update(Request $request, Project $project)
     {
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+            'name'               => ['required', 'string', 'max:255'],
             'digital_banking_id' => ['required', 'exists:users,id'],
-            'developer_id' => ['required', 'exists:users,id'],
-            'description' => ['nullable', 'string'],
+            'developer_id'       => ['required', 'exists:users,id'],
+            'description'        => ['nullable', 'string'],
         ]);
 
         $project->update($data);
@@ -175,7 +170,7 @@ class ProjectController extends Controller
             ->with('success', 'Project berhasil diperbarui.');
     }
 
-    // HAPUS PROJECT
+    /** Hapus project */
     public function destroy(Project $project)
     {
         $project->delete(); // Pastikan FK ke progresses ON DELETE CASCADE
@@ -185,16 +180,16 @@ class ProjectController extends Controller
 
     public function progresses(Request $r)
     {
-        $status = $r->input('status','all');
+        $status   = $r->input('status','all');
         $projects = Project::with(['digitalBanking','developer','progresses.updates','progresses.notes']);
 
-        if ($status==='in_progress') {
-            $projects->whereHas('progresses', fn($q)=>$q->whereNull('confirmed_at'));
-        } elseif ($status==='done') {
-            $projects->whereDoesntHave('progresses', fn($q)=>$q->whereNull('confirmed_at'))
-                     ->orWhereHas('progresses', fn($q)=>$q->whereNotNull('confirmed_at'));
+        if ($status === 'in_progress') {
+            $projects->whereHas('progresses', fn($q) => $q->whereNull('confirmed_at'));
+        } elseif ($status === 'done') {
+            $projects->whereDoesntHave('progresses', fn($q) => $q->whereNull('confirmed_at'))
+                     ->orWhereHas('progresses', fn($q) => $q->whereNotNull('confirmed_at'));
         }
 
-        return view('dig.progresses', ['projects'=>$projects->get()]);
+        return view('semua.progresses', ['projects' => $projects->get()]);
     }
 }

@@ -3,57 +3,72 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue; // ← opsional: hapus jika belum pakai queue
 use Illuminate\Notifications\Notification;
 
-class DigMarkedReadNotification extends Notification
+class DigMarkedReadNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
-    public array $payload;
+    /**
+     * Payload final yang akan disimpan di kolom `data` (JSON).
+     *
+     * @var array<string, mixed>
+     */
+    protected array $payload;
 
     /**
-     * @param array $payload
-     *  - project_id
-     *  - project_name
-     *  - by_user_id
-     *  - by_name
-     *  - by_role = 'digital_banking'
-     *  - message
-     *  - source_notification_id
+     * @param array{
+     *   project_id?: int|string|null,
+     *   project_name?: string|null,
+     *   by_user_id?: int|string|null,
+     *   by_name?: string|null,
+     *   by_role?: 'digital_banking'|'it'|string|null,
+     *   message?: string|null,
+     *   source_notification_id?: string|null
+     * } $payload
      */
-    public function __construct(array $payload)
+    public function __construct(array $payload = [])
     {
-        $this->payload = $payload;
+        // Pastikan kunci-kunci penting selalu ada
+        $this->payload = array_merge([
+            'type'        => 'dig_marked_read',                  // ← difilter di IT
+            'target_role' => 'it',                               // ← difilter di IT
+            'message'     => 'Digital Banking telah membaca notifikasi.',
+            'project_id'  => null,
+            'project_name'=> null,
+            'by_user_id'  => null,
+            'by_name'     => null,
+            'by_role'     => 'digital_banking',
+            'source_notification_id' => null,
+        ], $payload ?? []);
     }
 
-    public function via($notifiable)
+    /**
+     * Channel notifikasi.
+     */
+    public function via(object $notifiable): array
     {
-        return ['database']; // simpan di tabel notifications
+        return ['database'];
     }
 
-    public function toDatabase($notifiable)
+    /**
+     * Data yang disimpan ke tabel `notifications`.
+     *
+     * @return array<string, mixed>
+     */
+    public function toDatabase(object $notifiable): array
     {
-        return [
-            'type'         => 'dig_marked_read',
-            'message'      => $this->payload['message'] ?? 'Digital Banking telah membaca notifikasi.',
-            'project_id'   => $this->payload['project_id'] ?? null,
-            'project_name' => $this->payload['project_name'] ?? null,
-
-            // Siapa yang menandai baca
-            'by_user_id'   => $this->payload['by_user_id'] ?? null,
-            'by_name'      => $this->payload['by_name'] ?? null,
-            'by_role'      => $this->payload['by_role'] ?? 'digital_banking',
-
-            // Target role & konvensi tampilan
-            'target_role'  => 'it',
-
-            // referensi notif asal (opsional)
-            'source_notification_id' => $this->payload['source_notification_id'] ?? null,
-        ];
+        return $this->payload;
     }
 
-    public function toArray($notifiable)
+    /**
+     * (Opsional) representasi array umum.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(object $notifiable): array
     {
-        return $this->toDatabase($notifiable);
+        return $this->payload;
     }
 }

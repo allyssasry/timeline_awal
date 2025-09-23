@@ -15,21 +15,46 @@
   </style>
 </head>
 <body class="min-h-screen bg-[#F8ECEC] text-gray-900">
+ @php
+  $user      = auth()->user();
+  $role      = $user?->role; // 'digital_banking' atau 'it'
+  $roleLabel = $role === 'it' ? 'Developer' : 'DIG'; // ← tanpa strtoupper
 
+    // Tentukan rute sesuai role dengan aman (pakai fallback kalau rute IT belum ada)
+    $homeUrl = ($role === 'it'  && \Illuminate\Support\Facades\Route::has('it.dashboard'))
+                ? route('it.dashboard') : route('dig.dashboard');
+
+    $progressUrl = ($role === 'it' && \Illuminate\Support\Facades\Route::has('it.progresses'))
+                   ? route('semua.progresses') : route('semua.progresses');
+
+    $notifUrl = ($role === 'it' && \Illuminate\Support\Facades\Route::has('it.notifications'))
+                ? route('it.notifications') : route('dig.notifications');
+
+    // Rute Arsip – gunakan yang tersedia. Prioritaskan 'semua.arsip' jika ada.
+    $arsipUrl = \Illuminate\Support\Facades\Route::has('semua.arsip')
+               ? route('semua.arsip')
+               : ( \Illuminate\Support\Facades\Route::has('arsip.arsip') ? route('arsip.arsip') : url()->current() );
+
+    // Helper untuk memberi kelas aktif pada link
+    $isActive = function(string $url) {
+        return url()->current() === $url ? 'font-semibold' : 'text-gray-600 hover:text-red-600';
+    };
+  @endphp
   {{-- NAVBAR --}}
   <header class="sticky top-0 z-30 bg-[#F8ECEC]/90 backdrop-blur border-b">
     <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
       <div class="flex items-center gap-2">
         <img src="https://website-api.bankdki.co.id/integrations/storage/page-meta-data/007UlZbO3Oe6PivLltdFiQax6QH5kWDvb0cKPdn4.png" class="h-8" alt="Bank Jakarta" />
       </div>
-
+  {{-- NAVBAR – semua link selalu terlihat, diarahkan sesuai role --}}
       <nav class="hidden md:flex items-center gap-6 text-sm">
-        <a href="{{ url('/dig/dashboard') }}" class="text-gray-600 hover:text-red-600">Beranda</a>
-        <a href="{{ route('dig.progresses') }}" class="font-semibold">Progress</a>
-        <a href="{{ route('dig.notifications') }}" class="text-gray-600 hover:text-red-600">Notifikasi</a>
-        <a href="{{ route('semua.arsip') }}" class="text-gray-600 hover:text-red-600">Arsip</a>
-        <span class="font-semibold text-red-600">DIG</span>
+        <a href="{{ $homeUrl }}" class="{{ $isActive($homeUrl) }}">Beranda</a>
+        <a href="{{ $progressUrl }}" class="{{ $isActive($progressUrl) }}">Progress</a>
+        <a href="{{ $notifUrl }}" class="{{ $isActive($notifUrl) }}">Notifikasi</a>
+        <a href="{{ $arsipUrl }}" class="{{ $isActive($arsipUrl) }}">Arsip</a>
+        <span class="font-semibold text-red-600">{{ $roleLabel }}</span>
       </nav>
+
 
       <div class="relative">
         <button id="menuBtn" class="p-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50">
@@ -52,11 +77,11 @@
       $tab = fn($v) => $q===$v ? 'bg-[#7A1C1C] text-white' : 'bg-white text-[#7A1C1C] hover:bg-[#FFF2F2]';
     @endphp
     <div class="flex gap-3">
-      <a href="{{ route('dig.progresses',['status'=>'all']) }}"
+      <a href="{{ route('semua.progresses',['status'=>'all']) }}"
          class="rounded-[12px] h-9 px-5 text-sm font-semibold border-2 border-[#7A1C1C] {{ $tab('all') }} grid place-items-center">Semua</a>
-      <a href="{{ route('dig.progresses',['status'=>'in_progress']) }}"
+      <a href="{{ route('semua.progresses',['status'=>'in_progress']) }}"
          class="rounded-[12px] h-9 px-5 text-sm font-semibold border-2 border-[#7A1C1C] {{ $tab('in_progress') }} grid place-items-center">Dalam Proses</a>
-      <a href="{{ route('dig.progresses',['status'=>'done']) }}"
+      <a href="{{ route('semua.progresses',['status'=>'done']) }}"
          class="rounded-[12px] h-9 px-5 text-sm font-semibold border-2 border-[#7A1C1C] {{ $tab('done') }} grid place-items-center">Telah Selesai</a>
     </div>
 
@@ -239,13 +264,26 @@
                   @endif
                 </div>
 
-                <div class="text-sm grid gap-1 mb-3">
-                  <div><span class="inline-block w-36 text-gray-700">Timeline Mulai</span>: {{ $pr->start_date }}</div>
-                  <div><span class="inline-block w-36 text-gray-700">Timeline Selesai</span>: {{ $pr->end_date }}</div>
-                  <div><span class="inline-block w-36 text-gray-700">Target Progress</span>: {{ $pr->desired_percent }}%</div>
-                  <div><span class="inline-block w-36 text-gray-700">Realisasi Progress</span>: {{ $realisasi }}%</div>
-                </div>
+                <div class="mt-2 text-sm">
+                    <div class="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1">
+                      <span>Timeline Mulai</span>
+                      <span>:
+                        {{ $pr->start_date
+                           ? \Illuminate\Support\Carbon::parse($pr->start_date)->timezone('Asia/Jakarta')->format('d M Y')
+                           : '-' }}
+                      </span>
 
+                      <span>Timeline Selesai</span>
+                      <span>:
+                        {{ $pr->end_date
+                           ? \Illuminate\Support\Carbon::parse($pr->end_date)->timezone('Asia/Jakarta')->format('d M Y')
+                           : '-' }}
+                      </span>
+
+                      <span>Target Progress</span>    <span>: {{ (int)$pr->desired_percent }}%</span>
+                      <span>Realisasi Progress</span> <span>: {{ $realisasi }}%</span>
+                    </div>
+                  </div>
                 {{-- EDIT INLINE (hidden) --}}
                 <div id="editProgress-{{ $pr->id }}" class="hidden mb-3">
                   <form method="POST" action="{{ route('progresses.update', $pr->id) }}"

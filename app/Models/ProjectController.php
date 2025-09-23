@@ -157,6 +157,6 @@ class ProjectController extends Controller
                      ->orWhereHas('progresses', fn($q)=>$q->whereNotNull('confirmed_at'));
         }
 
-        return view('dig.progresses', ['projects'=>$projects->get()]);
+        return view('semua.progresses', ['projects'=>$projects->get()]);
     }
 }

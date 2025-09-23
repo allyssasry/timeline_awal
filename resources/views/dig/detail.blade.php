@@ -183,7 +183,7 @@
           <div class="grid md:grid-cols-[1fr,1fr,340px] gap-6">
             {{-- INFO TIMELINE + RIWAYAT CHIP --}}
             <div class="text-[13px] leading-6">
-              <<div><span class="inline-block w-40 text-gray-700">Timeline Mulai</span> :
+              <div><span class="inline-block w-40 text-gray-700">Timeline Mulai</span> :
   {{ $pr->start_date ? \Illuminate\Support\Carbon::parse($pr->start_date)->timezone('Asia/Jakarta')->format('d M Y') : '-' }}
 </div>
 
