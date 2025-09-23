@@ -14,6 +14,13 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProgressNoteController;
 use App\Http\Controllers\DigNotificationController;
 use App\Http\Controllers\ItNotificationController;
+// routes/web.php
+use App\Http\Controllers\SupervisorDashboardController;
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/supervisor/dashboard', [SupervisorDashboardController::class, 'index'])
+        ->name('supervisor.dashboard');
+});
 
 
 // IT

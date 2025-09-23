@@ -15,32 +15,60 @@
   </style>
 </head>
 <body class="min-h-screen bg-[#F8ECEC] text-gray-900">
+@php
+  $user = auth()->user();
+  $role = $user?->role; // 'digital_banking' | 'it' | 'supervisor'
 
-  @php
-  $user      = auth()->user();
-  $role      = $user?->role; // 'digital_banking' atau 'it'
-  $roleLabel = $role === 'it' ? 'Developer' : 'DIG'; // ← tanpa strtoupper
+  // Label yang rapi per role
+  $roleLabel = match ($role) {
+      'it'            => 'Developer',
+      'digital_banking'=> 'DIG',
+      'supervisor'    => 'Supervisor',
+      default         => 'User',
+  };
 
-    // Tentukan rute sesuai role dengan aman (pakai fallback kalau rute IT belum ada)
-    $homeUrl = ($role === 'it'  && \Illuminate\Support\Facades\Route::has('it.dashboard'))
-                ? route('it.dashboard') : route('dig.dashboard');
+  // Tentukan rute "Beranda" sesuai role, dengan fallback aman
+  if ($role === 'it' && \Illuminate\Support\Facades\Route::has('it.dashboard')) {
+      $homeUrl = route('it.dashboard');
+  } elseif ($role === 'supervisor' && \Illuminate\Support\Facades\Route::has('supervisor.dashboard')) {
+      $homeUrl = route('supervisor.dashboard');
+  } else {
+      // default ke dashboard DIG bila ada, kalau tidak ya ke root
+      $homeUrl = \Illuminate\Support\Facades\Route::has('dig.dashboard')
+          ? route('dig.dashboard') : url('/');
+  }
 
-    $progressUrl = ($role === 'it' && \Illuminate\Support\Facades\Route::has('it.progresses'))
-                   ? route('semua.progresses') : route('semua.progresses');
+  // Progress: untuk supervisor arahkan ke dashboard supervisor jika ada
+  if ($role === 'it' && \Illuminate\Support\Facades\Route::has('it.progresses')) {
+      $progressUrl = route('it.progresses');
+  } elseif ($role === 'supervisor' && \Illuminate\Support\Facades\Route::has('supervisor.dashboard')) {
+      $progressUrl = route('supervisor.dashboard');
+  } else {
+      $progressUrl = \Illuminate\Support\Facades\Route::has('semua.progresses')
+          ? route('semua.progresses')
+          : ($homeUrl ?? url('/'));
+  }
 
-    $notifUrl = ($role === 'it' && \Illuminate\Support\Facades\Route::has('it.notifications'))
-                ? route('it.notifications') : route('dig.notifications');
+  // Notifikasi: masing-masing role kalau ada, kalau tidak fallback ke DIG
+  if ($role === 'it' && \Illuminate\Support\Facades\Route::has('it.notifications')) {
+      $notifUrl = route('it.notifications');
+  } elseif ($role === 'supervisor' && \Illuminate\Support\Facades\Route::has('supervisor.notifications')) {
+      $notifUrl = route('supervisor.notifications');
+  } else {
+      $notifUrl = \Illuminate\Support\Facades\Route::has('dig.notifications')
+          ? route('dig.notifications') : url()->current();
+  }
 
-    // Rute Arsip – gunakan yang tersedia. Prioritaskan 'semua.arsip' jika ada.
-    $arsipUrl = \Illuminate\Support\Facades\Route::has('semua.arsip')
-               ? route('semua.arsip')
-               : ( \Illuminate\Support\Facades\Route::has('arsip.arsip') ? route('arsip.arsip') : url()->current() );
+  // Arsip – pakai 'semua.arsip' bila ada, kalau tidak 'arsip.arsip', jika tidak ada ya current
+  $arsipUrl = \Illuminate\Support\Facades\Route::has('semua.arsip')
+      ? route('semua.arsip')
+      : (\Illuminate\Support\Facades\Route::has('arsip.arsip') ? route('arsip.arsip') : url()->current());
 
-    // Helper untuk memberi kelas aktif pada link
-    $isActive = function(string $url) {
-        return url()->current() === $url ? 'font-semibold' : 'text-gray-600 hover:text-red-600';
-    };
-  @endphp
+  // Helper: menandai link aktif
+  $isActive = function (string $url) {
+      return url()->current() === $url ? 'font-semibold text-red-600' : 'text-gray-600 hover:text-red-600';
+  };
+@endphp
 
   <header class="sticky top-0 z-30 bg-[#F8ECEC]/90 backdrop-blur border-b">
     <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
