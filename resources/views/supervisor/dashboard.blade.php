@@ -25,8 +25,8 @@
 
       <nav class="hidden md:flex items-center gap-6 text-sm">
         <a href="#beranda" class="font-semibold">Beranda</a>
-        <a href="{{ route('semua.progresses') }}" class="text-gray-600 hover:text-red-600">Progress</a>
-        <a href="{{ route('supervisor.dashboard') }}" class="text-gray-600 hover:text-red-600">Notifikasi</a>
+        <a href="{{ route('supervisor.progresses') }}" class="text-gray-600 hover:text-red-600">Progress</a>
+        <a href="{{ route('supervisor.notifications') }}" class="text-gray-600 hover:text-red-600">Notifikasi</a>
         <a href="{{ route('semua.arsip') }}" class="text-gray-600 hover:text-red-600">Arsip</a>
         <span class="font-semibold text-red-600">Supervisor</span>
       </nav>
@@ -179,7 +179,7 @@
           </div>
 
            {{-- CTA detail (opsional) --}}
-          <div class="flex items-start justify-end">
+          <div class=" mt-4 flex items-start justify-end gap-x-2">
             <a href="{{ route('dig.projects.show', $project->id) }}"
                class="inline-flex items-center gap-2 rounded-lg border border-[#7A1C1C] px-3 py-1.5 text-xs font-semibold text-[#7A1C1C] bg-white hover:bg-[#FFF2F2]">
               Detail Informasi

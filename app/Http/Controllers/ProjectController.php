@@ -6,111 +6,97 @@ use App\Models\Project;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str; // ⬅️ penting untuk UUID notifikasi
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use App\Notifications\SupervisorNotification;
 
 class ProjectController extends Controller
 {
-    /**
-     * Dashboard DIG
-     * - Ambil projects + PJ DIG/IT
-     * - Ambil progresses + 1 update terbaru/ progress (untuk ring/preview)
-     * - Kirim juga daftar user DIG & IT untuk dropdown di modal
-     */
+    /** Modal tambah project (DIG) */
     public function create()
     {
-        // Dropdown penanggung jawab berdasar role
-        $digitalUsers = User::where('role', 'digital_banking')->orderBy('name')->get();
-        $itUsers      = User::where('role', 'it')->orderBy('name')->get();
+        $digitalUsers = User::where('role', 'digital_banking')->orderBy('name')->get(['id','name','username']);
+        $itUsers      = User::where('role', 'it')->orderBy('name')->get(['id','name','username']);
 
-        // Tetap render dashboard, tapi kirim flag agar modal "Tambah Project" dibuka
-        $projects = Project::with(['creator', 'progresses'])->withCount('progresses')->get();
+        $projects = Project::with([
+            'creator:id,name',
+            'progresses' => fn($q) => $q->with('creator:id,name,role')->withCount('updates'),
+        ])->withCount('progresses')->latest()->get();
 
         return view('dig.dashboard', compact('projects', 'digitalUsers', 'itUsers'))
                ->with('openCreateModal', true);
     }
 
+    /** Dashboard list */
     public function index()
     {
         $projects = Project::with([
             'digitalBanking:id,name,username',
             'developer:id,name,username',
             'progresses' => function ($q) {
-             $q->with([
-            'creator:id,name,role',               // ⬅️ ini penting
-            'updates' => fn($uq) => $uq->latest()
-             ]);
+                $q->with([
+                    'creator:id,name,role',
+                    'updates' => fn ($uq) => $uq->latest(),
+                ]);
             },
-         ]) ->latest()
-        ->get();
+        ])->latest()->get();
 
-        $digitalUsers = User::where('role', 'digital_banking')
-            ->orderBy('name')
-            ->get(['id', 'name', 'username']);
+        $digitalUsers = User::where('role', 'digital_banking')->orderBy('name')->get(['id','name','username']);
+        $itUsers      = User::where('role', 'it')->orderBy('name')->get(['id','name','username']);
 
-        $itUsers = User::where('role', 'it')
-            ->orderBy('name')
-            ->get(['id', 'name', 'username']);
-
-        return view('dig.dashboard', compact('projects', 'digitalUsers', 'itUsers'));
+        return view('dig.dashboard', compact('projects','digitalUsers','itUsers'));
     }
 
     /**
-     * Simpan project baru + daftar progress awal
-     * Hanya user dengan role digital_banking yang boleh membuat project.
-     * Setelah tersimpan, kirim notifikasi ke anak IT (developer_id) bahwa DIG membuat project.
+     * Simpan project (khusus DIG) + progress awal.
+     * Kirim:
+     * - DB notification ke IT (developer)
+     * - DB notification ke semua Supervisor (PROJECT_CREATED_BY_DIG)
      */
     public function store(Request $request)
     {
-        // Batasi hanya Digital Banking
         if (auth()->user()?->role !== 'digital_banking') {
             abort(403, 'Hanya Digital Banking yang dapat membuat project.');
         }
 
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'digital_banking_id' => ['required', 'exists:users,id'],
-            'developer_id' => ['required', 'exists:users,id'],
-
-            // Progresses awal
-            'progresses' => ['required', 'array', 'min:1'],
-            'progresses.*.name' => ['required', 'string', 'max:255'],
-            'progresses.*.start_date' => ['required', 'date'],
-            'progresses.*.end_date' => ['required', 'date', 'after_or_equal:progresses.*.start_date'],
-            'progresses.*.desired_percent' => ['required', 'integer', 'min:0', 'max:100'],
+            'name'                          => ['required','string','max:255'],
+            'description'                   => ['nullable','string'],
+            'digital_banking_id'            => ['required','exists:users,id'],
+            'developer_id'                  => ['required','exists:users,id'],
+            'progresses'                    => ['required','array','min:1'],
+            'progresses.*.name'             => ['required','string','max:255'],
+            'progresses.*.start_date'       => ['required','date'],
+            'progresses.*.end_date'         => ['required','date','after_or_equal:progresses.*.start_date'],
+            'progresses.*.desired_percent'  => ['required','integer','min:0','max:100'],
         ]);
 
-        // Buat project
-        $project = Project::create([
-            'name'               => $data['name'],
-            'description'        => $data['description'] ?? null,
-            'created_by'         => Auth::id(),
-            'digital_banking_id' => $data['digital_banking_id'],
-            'developer_id'       => $data['developer_id'],
-        ]);
-
-        // Buat daftar progress awal
-        foreach ($data['progresses'] as $p) {
-            $project->progresses()->create([
-                'name'            => $p['name'],
-                'start_date'      => $p['start_date'],
-                'end_date'        => $p['end_date'],
-                'desired_percent' => $p['desired_percent'],
-                'created_by'      => Auth::id(),   // ⬅️ WAJIB diisi
+        $project = DB::transaction(function () use ($data) {
+            // Buat project
+            $project = Project::create([
+                'name'               => $data['name'],
+                'description'        => $data['description'] ?? null,
+                'created_by'         => Auth::id(),
+                'digital_banking_id' => $data['digital_banking_id'],
+                'developer_id'       => $data['developer_id'],
             ]);
-        }
 
-        /**
-         * =========================
-         * KIRIM NOTIFIKASI KE IT
-         * =========================
-         * Format data mengikuti pola yang kamu pakai:
-         * - type        : "dig_project_created"
-         * - by_role     : "digital_banking"
-         * - target_role : "it"
-         */
-        $developer = User::find($project->developer_id);
-        if ($developer) {
+            // Progress awal (penting: created_by diisi)
+            foreach ($data['progresses'] as $p) {
+                $project->progresses()->create([
+                    'name'            => $p['name'],
+                    'start_date'      => $p['start_date'],
+                    'end_date'        => $p['end_date'],
+                    'desired_percent' => $p['desired_percent'],
+                    'created_by'      => Auth::id(), // agar “dibuat oleh DIG”
+                ]);
+            }
+
+            return $project;
+        });
+
+        // === Notif ke IT (database notifications) ===
+        if ($developer = User::find($project->developer_id)) {
             $payload = [
                 'type'               => 'dig_project_created',
                 'by_role'            => 'digital_banking',
@@ -124,64 +110,95 @@ class ProjectController extends Controller
                 'late'               => false,
             ];
 
-            // Penting: isi kolom 'id' dengan UUID agar tidak error default value
+            // isi UUID jika kolom id notifikasi tidak auto
             $developer->notifications()->create([
-                'id'   => (string) Str::uuid(), // ⬅️ mencegah error "Field 'id' doesn't have a default value"
+                'id'   => (string) Str::uuid(),
                 'type' => 'app.dig',
                 'data' => $payload,
-                // notifiable_id & notifiable_type otomatis terisi dari relasi
             ]);
         }
 
-        return redirect()
-            ->route('projects.index')
-            ->with('success', 'Project berhasil dibuat.');
+        // === Notif ke semua Supervisor ===
+        $supPayload = [
+            'type'         => SupervisorNotification::PROJECT_CREATED_BY_DIG,
+            'project_id'   => $project->id,
+            'project_name' => $project->name,
+            'message'      => 'DIG membuat project baru.',
+            'when'         => now()->toISOString(),
+        ];
+
+        User::where('role','supervisor')->get()
+            ->each(fn ($sup) => $sup->notify(new SupervisorNotification($supPayload)));
+
+        // Redirect aman
+        $route = \Illuminate\Support\Facades\Route::has('projects.index')
+               ? 'projects.index'
+               : (\Illuminate\Support\Facades\Route::has('dig.dashboard') ? 'dig.dashboard' : '/');
+
+        return redirect()->route($route)->with('success','Project berhasil dibuat.');
     }
 
     /** Detail project */
     public function show(Project $project)
     {
-        // load relasi agar detail lengkap
-        $project->load(['progresses.updates', 'digitalBanking', 'developer', 'creator']);
+        $project->load([
+            'progresses.creator:id,name,role',
+            'progresses.updates',
+            'digitalBanking:id,name,username',
+            'developer:id,name,username',
+            'creator:id,name',
+        ]);
+
         return view('dig.detail', compact('project'));
     }
 
+    /** Edit project */
     public function edit(Project $project)
     {
-        $digitalUsers = User::where('role', 'digital_banking')->get();
-        $itUsers      = User::where('role', 'it')->get();
+        $digitalUsers = User::where('role','digital_banking')->orderBy('name')->get(['id','name','username']);
+        $itUsers      = User::where('role','it')->orderBy('name')->get(['id','name','username']);
 
-        return view('projects.edit', compact('project', 'digitalUsers', 'itUsers'));
+        return view('projects.edit', compact('project','digitalUsers','itUsers'));
     }
 
-    /** Simpan perubahan */
+    /** Update project */
     public function update(Request $request, Project $project)
     {
         $data = $request->validate([
-            'name'               => ['required', 'string', 'max:255'],
-            'digital_banking_id' => ['required', 'exists:users,id'],
-            'developer_id'       => ['required', 'exists:users,id'],
-            'description'        => ['nullable', 'string'],
+            'name'               => ['required','string','max:255'],
+            'digital_banking_id' => ['required','exists:users,id'],
+            'developer_id'       => ['required','exists:users,id'],
+            'description'        => ['nullable','string'],
         ]);
 
         $project->update($data);
 
-        return redirect()->route('dig.dashboard')
-            ->with('success', 'Project berhasil diperbarui.');
+        $route = \Illuminate\Support\Facades\Route::has('dig.dashboard') ? 'dig.dashboard' : '/';
+
+        return redirect()->route($route)->with('success','Project berhasil diperbarui.');
     }
 
     /** Hapus project */
     public function destroy(Project $project)
     {
-        $project->delete(); // Pastikan FK ke progresses ON DELETE CASCADE
-        return redirect()->route('dig.dashboard')
-            ->with('success', 'Project berhasil dihapus.');
+        $project->delete(); // pastikan FK progresses ON DELETE CASCADE
+
+        $route = \Illuminate\Support\Facades\Route::has('dig.dashboard') ? 'dig.dashboard' : '/';
+
+        return redirect()->route($route)->with('success','Project berhasil dihapus.');
     }
 
+    /** Halaman semua progress (versi “semua”) */
     public function progresses(Request $r)
     {
-        $status   = $r->input('status','all');
-        $projects = Project::with(['digitalBanking','developer','progresses.updates','progresses.notes']);
+        $status = $r->input('status','all');
+
+        $projects = Project::with([
+            'digitalBanking:id,name,username',
+            'developer:id,name,username',
+            'progresses.updates',
+            'progresses.notes',
+        ]);
 
         if ($status === 'in_progress') {
             $projects->whereHas('progresses', fn($q) => $q->whereNull('confirmed_at'));
@@ -190,6 +207,6 @@ class ProjectController extends Controller
                      ->orWhereHas('progresses', fn($q) => $q->whereNotNull('confirmed_at'));
         }
 
-        return view('semua.progresses', ['projects' => $projects->get()]);
+        return view('semua.progresses', ['projects' => $projects->latest()->get()]);
     }
 }

@@ -17,6 +17,44 @@ use App\Http\Controllers\ItNotificationController;
 // routes/web.php
 use App\Http\Controllers\SupervisorDashboardController;
 
+use App\Http\Controllers\SupervisorController;
+use App\Http\Controllers\SupervisorNotificationController;
+
+Route::prefix('supervisor')
+    ->name('supervisor.')
+    ->middleware('auth')
+    ->group(function () {
+        Route::get('/dashboard',  [SupervisorController::class, 'dashboard'])->name('dashboard');
+        Route::get('/progresses', [SupervisorController::class, 'progresses'])->name('progresses');
+        Route::get('/notifications', [SupervisorController::class, 'notifications'])->name('notifications'); // ⬅️ ini
+        Route::get('/projects/{project}', [SupervisorController::class, 'show'])->name('show');
+    });
+
+
+Route::prefix('supervisor')
+    ->name('supervisor.')
+    ->middleware('auth')
+    ->group(function () {
+        Route::get('/dashboard',     [SupervisorController::class, 'dashboard'])->name('dashboard');
+        Route::get('/progresses',    [SupervisorController::class, 'progresses'])->name('progresses');
+        Route::get('/notifications', [SupervisorController::class, 'notifications'])->name('notifications');
+});
+
+
+// Middleware inline (tanpa Kernel): pastikan role = supervisor
+Route::prefix('supervisor')
+    ->name('supervisor.')
+    ->middleware('auth')
+    ->group(function () {
+        Route::get('/dashboard',  [SupervisorController::class, 'dashboard'])->name('dashboard');
+        Route::get('/progresses', [SupervisorController::class, 'progresses'])->name('progresses');
+
+        // Detail project supervisor
+        Route::get('/projects/{project}', [SupervisorController::class, 'show'])
+            ->name('projects.show');   // ← cukup "projects.show", karena sudah ada prefix 'supervisor.'
+    });
+
+
 Route::middleware(['auth'])->group(function () {
     Route::get('/supervisor/dashboard', [SupervisorDashboardController::class, 'index'])
         ->name('supervisor.dashboard');

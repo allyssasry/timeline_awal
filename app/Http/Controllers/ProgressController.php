@@ -5,14 +5,18 @@ namespace App\Http\Controllers;
 
 use App\Models\Project;
 use App\Models\Progress;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Notifications\ProgressConfirmed;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests; // <-- IMPORT WAJIB
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+
+// Notifikasi
+use App\Notifications\ProgressConfirmed;            // notif ke DIG saat IT konfirmasi
+use App\Notifications\SupervisorStatusNotification; // notif ke Supervisor (it_done, dig_done, project_done)
 
 class ProgressController extends Controller
 {
-    use AuthorizesRequests; // <-- agar $this->authorize() tersedia
+    use AuthorizesRequests;
 
     /**
      * POST /projects/{project}/progresses
@@ -33,9 +37,7 @@ class ProgressController extends Controller
         return back()->with('success','Progress berhasil ditambahkan.');
     }
 
-    /**
-     * Alias untuk kompatibilitas.
-     */
+    /** Alias kompatibilitas. */
     public function storeForProject(Request $request, Project $project)
     {
         return $this->store($request, $project);
@@ -77,7 +79,7 @@ class ProgressController extends Controller
     /**
      * POST /progresses/{progress}/updates
      * Simpan update harian (realisasi %). Hanya pemilik progress yang boleh update.
-     * route name yang dipakai di view: progresses.updates.store
+     * route name di view: progresses.updates.store
      */
     public function updatesStore(Request $request, Progress $progress)
     {
@@ -88,7 +90,6 @@ class ProgressController extends Controller
             'percent'     => ['required','integer','min:0','max:100'],
         ]);
 
-        // pastikan relasi updates() ada di model Progress
         $progress->updates()->create([
             'update_date' => $data['update_date'],
             'percent'     => $data['percent'],
@@ -100,8 +101,8 @@ class ProgressController extends Controller
 
     /**
      * POST /progresses/{progress}/notes
-     * Simpan catatan. (Biasanya boleh untuk DIG & IT, bukan hanya pemilik)
-     * route name di view: progresses.notes.store
+     * Simpan catatan. (Biasanya boleh untuk DIG & IT)
+     * route name: progresses.notes.store
      */
     public function notesStore(Request $request, Progress $progress)
     {
@@ -109,11 +110,12 @@ class ProgressController extends Controller
             'body' => ['required','string','max:2000'],
         ]);
 
-        // pastikan relasi notes() ada di model Progress
+        // GUNAKAN kolom yang ada pada tabel notes mu:
+        // Jika kolomnya 'content', pakai 'content'. Jika 'body', ganti jadi 'body'.
         $progress->notes()->create([
-            'body'    => $data['body'],
+            'content' => $data['body'],              // <- ganti ke 'body' jika kolomnya 'body'
             'user_id' => Auth::id(),
-            'role'    => Auth::user()->role ?? null, // 'digital_banking' atau 'it'
+            'role'    => Auth::user()->role ?? null, // 'digital_banking' | 'it'
         ]);
 
         return back()->with('success', 'Catatan ditambahkan.');
@@ -131,7 +133,7 @@ class ProgressController extends Controller
             return back()->with('success', 'Progress sudah dikonfirmasi sebelumnya.');
         }
 
-        // Ambil realisasi terbaru (aman terhadap null)
+        // Ambil realisasi terbaru
         $latestUpdate = $progress->updates()->orderByDesc('update_date')->first();
         $latest = (int) (
             optional($latestUpdate)->percent
@@ -139,40 +141,77 @@ class ProgressController extends Controller
             ?? 0
         );
 
-        if ($latest < (int)$progress->desired_percent) {
+        if ($latest < (int) $progress->desired_percent) {
             return back()->withErrors(['Konfirmasi gagal: realisasi belum mencapai target.']);
         }
 
         $progress->forceFill(['confirmed_at' => now()])->save();
 
-        // Notifikasi DIG jika dikonfirmasi oleh IT
-        $confirmer     = Auth::user();
-        $project       = $progress->project;
-        $developerUser = optional($project)->developer;
-        $digitalUser   = optional($project)->digitalBanking;
+        // ===== Notifikasi ke DIG jika IT yang konfirmasi (punyamu) =====
+        $confirmer = Auth::user();
+        $project   = $progress->project()->with(['digitalBanking','developer'])->first();
 
-        if (optional($project->developer)->role === 'it'
-    && optional($confirmer)->role === 'it'
-    && $digitalUser) {
-    $digitalUser->notify(new \App\Notifications\ProgressConfirmed($progress, $confirmer));
-}
+        if (
+            optional($project->developer)->role === 'it' &&
+            optional($confirmer)->role === 'it' &&
+            $project->digitalBanking
+        ) {
+            $project->digitalBanking->notify(new ProgressConfirmed($progress, $confirmer));
+        }
 
-        // Cek semua progress
+        // ===== Re-load project + seluruh progress beserta latest update =====
         $project = $progress->project()->with([
             'progresses' => function ($q) {
-                $q->with(['updates' => fn($u) => $u->orderByDesc('update_date')]);
-            }
+                $q->with([
+                    'creator',
+                    'updates' => fn($u) => $u->orderByDesc('update_date')
+                ]);
+            },
+            'digitalBanking',
+            'developer',
         ])->first();
 
+        // Semua progress selesai?
         $allDone = $project->progresses->every(function ($pr) {
             $last = $pr->updates->first();
-            $real = (int)(optional($last)->percent ?? optional($last)->progress_percent ?? 0);
-            return $pr->confirmed_at && $real >= (int)$pr->desired_percent;
+            $real = (int) (optional($last)->percent ?? optional($last)->progress_percent ?? 0);
+            return $pr->confirmed_at && $real >= (int) $pr->desired_percent;
         });
 
         if ($allDone && is_null($project->finished_at)) {
             $project->forceFill(['finished_at' => now()])->save();
         }
+
+        // ===== Notifikasi SUPERVISOR =====
+        // Kelompokkan progress berdasarkan role pembuatnya
+        $itGroup  = $project->progresses->filter(fn($p) => ($p->creator?->role ?? null) === 'it');
+        $digGroup = $project->progresses->filter(fn($p) => ($p->creator?->role ?? null) === 'digital_banking');
+
+        // Done per role (HARUS ada progress di grup itu)
+        $itDone  = $itGroup->isNotEmpty()  && $itGroup->every(fn($p) => (bool) $p->confirmed_at);
+        $digDone = $digGroup->isNotEmpty() && $digGroup->every(fn($p) => (bool) $p->confirmed_at);
+
+        $payloadCommon = [
+            'project_id'   => $project->id,
+            'project_name' => $project->name,
+            'when'         => now()->toISOString(),
+        ];
+
+        $supervisors = User::where('role','supervisor')->get();
+        $notifySup = function (array $payload) use ($supervisors) {
+            foreach ($supervisors as $sup) {
+                $sup->notify(new SupervisorStatusNotification($payload));
+            }
+        };
+
+        if ($itDone && $digDone) {
+            $notifySup(array_merge($payloadCommon, ['status' => 'project_done']));
+        } elseif ($itDone) {
+            $notifySup(array_merge($payloadCommon, ['status' => 'it_done']));
+        } elseif ($digDone) {
+            $notifySup(array_merge($payloadCommon, ['status' => 'dig_done']));
+        }
+        // (opsional) else: tidak kirim apapun saat sebagian belum selesai
 
         return back()->with('success', $allDone ? 'Project selesai dikonfirmasi.' : 'Progress selesai dikonfirmasi.');
     }

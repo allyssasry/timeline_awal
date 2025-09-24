@@ -66,7 +66,7 @@
 
   // Helper: menandai link aktif
   $isActive = function (string $url) {
-      return url()->current() === $url ? 'font-semibold text-red-600' : 'text-gray-600 hover:text-red-600';
+      return url()->current() === $url ? 'font-semibold' : 'text-gray-600 hover:text-red-600';
   };
 @endphp
 
@@ -186,14 +186,6 @@
               <span>{{ $project->description ?: '-' }}</span>
             </div>
           </div>
-
-          {{-- CTA --}}
-          <div class="flex items-start justify-end">
-            <a href="{{ route('dig.projects.show', $project->id) }}"
-               class="inline-flex items-center gap-2 rounded-lg border border-[#7A1C1C] px-3 py-1.5 text-xs font-semibold text-[#7A1C1C] bg-white hover:bg-[#FFF2F2]">
-              Detail Informasi
-            </a>
-          </div>
         </div>
 
         {{-- List Progress (scrollable bila banyak) --}}
@@ -217,6 +209,14 @@
               <div class="col-span-2 text-sm text-gray-600">Tidak ada progress.</div>
             @endforelse
           </div>
+        </div>
+         {{-- CTA (POSISI DI KANAN-BAWAH KARTU) --}}
+        <div class="mt-4 flex justify-end">
+          <a href="{{ route('supervisor.projects.show', $project->id) }}"
+   class="inline-flex items-center gap-2 rounded-lg border border-[#7A1C1C] px-3 py-1.5 text-xs font-semibold text-[#7A1C1C] bg-white hover:bg-[#FFF2F2]">
+  Detail Informasi
+</a>
+
         </div>
       </section>
     @empty

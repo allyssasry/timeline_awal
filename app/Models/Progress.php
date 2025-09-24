@@ -33,6 +33,7 @@ class Progress extends Model
     {
         return $this->hasMany(\App\Models\ProgressUpdate::class)->orderByDesc('update_date');
     }
+    // App/Models/Progress.php
     public function notes()
     {
         return $this->hasMany(\App\Models\ProgressNote::class)->latest();
