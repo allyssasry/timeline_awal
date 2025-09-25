@@ -4,11 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Project;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Http\Request;
+// HAPUS: use App\Models\Notification;  // tidak dipakai lagi
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Notifications\SupervisorNotification;
+use App\Notifications\DigCompletionDecision; // <— TAMBAHKAN
 
 class ProjectController extends Controller
 {
@@ -72,7 +75,6 @@ class ProjectController extends Controller
         ]);
 
         $project = DB::transaction(function () use ($data) {
-            // Buat project
             $project = Project::create([
                 'name'               => $data['name'],
                 'description'        => $data['description'] ?? null,
@@ -81,21 +83,20 @@ class ProjectController extends Controller
                 'developer_id'       => $data['developer_id'],
             ]);
 
-            // Progress awal (penting: created_by diisi)
             foreach ($data['progresses'] as $p) {
                 $project->progresses()->create([
                     'name'            => $p['name'],
                     'start_date'      => $p['start_date'],
                     'end_date'        => $p['end_date'],
                     'desired_percent' => $p['desired_percent'],
-                    'created_by'      => Auth::id(), // agar “dibuat oleh DIG”
+                    'created_by'      => Auth::id(),
                 ]);
             }
 
             return $project;
         });
 
-        // === Notif ke IT (database notifications) ===
+        // === Notif ke IT (database notifications bawaan Laravel) ===
         if ($developer = User::find($project->developer_id)) {
             $payload = [
                 'type'               => 'dig_project_created',
@@ -110,7 +111,7 @@ class ProjectController extends Controller
                 'late'               => false,
             ];
 
-            // isi UUID jika kolom id notifikasi tidak auto
+            // Simpan ke tabel notifications bawaan (notifiable)
             $developer->notifications()->create([
                 'id'   => (string) Str::uuid(),
                 'type' => 'app.dig',
@@ -181,7 +182,7 @@ class ProjectController extends Controller
     /** Hapus project */
     public function destroy(Project $project)
     {
-        $project->delete(); // pastikan FK progresses ON DELETE CASCADE
+        $project->delete();
 
         $route = \Illuminate\Support\Facades\Route::has('dig.dashboard') ? 'dig.dashboard' : '/';
 
@@ -209,4 +210,35 @@ class ProjectController extends Controller
 
         return view('semua.progresses', ['projects' => $projects->latest()->get()]);
     }
+
+    /** Finalisasi: Memenuhi / Tidak Memenuhi (khusus DIG) */
+   
+public function setCompletion(Request $request, Project $project)
+{
+    // Batasi role (opsional tapi disarankan)
+    if (auth()->user()?->role !== 'digital_banking') {
+        abort(403, 'Hanya Digital Banking yang dapat memutuskan penyelesaian.');
+    }
+
+    $data = $request->validate([
+        'meets' => ['required','in:0,1'],
+    ]);
+
+    $project->completed_at      = $project->completed_at ?? now();
+    $project->meets_requirement = (bool) ((int) $data['meets']);
+    $project->save();
+
+    // KIRIM NOTIFIKASI ke developer proyek (user IT)
+    if ($dev = User::find($project->developer_id)) {
+        $dev->notify(new DigCompletionDecision(
+            projectId:   $project->id,
+            projectName: $project->name,
+            meets:       $project->meets_requirement,
+            byId:        auth()->id(),
+            byName:      auth()->user()?->name
+        ));
+    }
+
+    return back()->with('success','Status penyelesaian project diperbarui.');
+}
 }

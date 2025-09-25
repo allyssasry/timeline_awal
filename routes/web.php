@@ -40,6 +40,17 @@ Route::prefix('supervisor')
         Route::get('/notifications', [SupervisorController::class, 'notifications'])->name('notifications');
 });
 
+Route::prefix('supervisor')->name('supervisor.')->middleware('auth')->group(function () {
+    Route::get('/notifications', [SupervisorController::class, 'notifications'])->name('notifications');
+    Route::post('/notifications/read-all', [SupervisorController::class, 'notificationsReadAll'])->name('notifications.readAll');
+
+    // (opsional) untuk tandai satu notifikasi
+    Route::post('/notifications/{id}/read', [SupervisorController::class, 'notificationsReadOne'])->name('notifications.readOne');
+});
+
+Route::patch('/projects/{project}/completion', [ProjectController::class, 'setCompletion'])
+    ->name('projects.setCompletion');
+
 
 // Middleware inline (tanpa Kernel): pastikan role = supervisor
 Route::prefix('supervisor')
@@ -54,6 +65,11 @@ Route::prefix('supervisor')
             ->name('projects.show');   // ← cukup "projects.show", karena sudah ada prefix 'supervisor.'
     });
 
+    Route::middleware(['auth'])->group(function () {
+    Route::get('/it/notifications', [ItNotificationController::class, 'index'])->name('it.notifications');
+    Route::post('/it/notifications/read-all', [ItNotificationController::class, 'markAllRead'])->name('it.notifications.readAll');
+    Route::post('/it/notifications/{id}/read', [ItNotificationController::class, 'markRead'])->name('it.notifications.read');
+});
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/supervisor/dashboard', [SupervisorDashboardController::class, 'index'])

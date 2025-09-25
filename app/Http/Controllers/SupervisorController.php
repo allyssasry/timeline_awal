@@ -125,6 +125,39 @@ public function notifications(Request $request)
 
     return view('supervisor.notifications', compact('today','unreadCount'));
 }
+
+public function notificationsReadAll(Request $request)
+{
+    $user = $request->user();
+
+    $allowed = [SN::PROJECT_CREATED_BY_DIG, SN::PROJECT_DONE, SN::PROJECT_UNMET];
+
+    // Tandai hanya notifikasi supervisor yang relevan
+    $user->unreadNotifications()
+        ->whereIn('data->type', $allowed)
+        ->update(['read_at' => now()]);
+
+    return back()->with('success', 'Semua notifikasi ditandai telah dibaca.');
+}
+
+/**
+ * (OPSIONAL) Tandai satu notifikasi saja, jika kamu ingin tombol per item.
+ */
+public function notificationsReadOne(Request $request, string $notificationId)
+{
+    $user = $request->user();
+
+    $n = $user->unreadNotifications()
+        ->where('id', $notificationId)
+        ->first();
+
+    if ($n) {
+        $n->read_at = now();
+        $n->save();
+    }
+
+    return back();
+}
 }
 
 

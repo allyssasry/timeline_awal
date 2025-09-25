@@ -1,9 +1,9 @@
-{{-- resources/views/dig/dashboard.blade.php --}}
+{{-- resources/views/it/dashboard.blade.php --}}
 <!doctype html>
 <html lang="id">
 <head>
   <meta charset="utf-8">
-  <title>Dashboard DIG</title>
+  <title>Dashboard IT</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -24,11 +24,11 @@
       </div>
 
       <nav class="hidden md:flex items-center gap-6 text-sm">
-        <a href="#beranda" class="font-semibold">Beranda</a>
+        <a href="#beranda" class="text-gray-600 hover:text-red-600">Beranda</a>
         <a href="{{ route('semua.progresses') }}" class="text-gray-600 hover:text-red-600">Progress</a>
         <a href="{{ route('it.notifications') }}" class="text-gray-600 hover:text-red-600">Notifikasi</a>
         <a href="{{ route('semua.arsip') }}" class="text-gray-600 hover:text-red-600">Arsip</a>
-        <span class="font-semibold text-red-600">Developer</span>
+        <span class="font-semibold text-red-600">IT</span>
       </nav>
 
       <div class="relative">
@@ -46,11 +46,11 @@
   </header>
 
   {{-- BANNER --}}
-  <section id="beranda" class="relative h-[260px] md:h-[320px] overflow-hidden">
+  <section id="beranda" class="relative h-[200px] md:h-[260px] overflow-hidden">
     <img src="https://i.pinimg.com/736x/c5/43/71/c543719c97d9efa97da926387fa79d1f.jpg" class="w-full h-full object-cover" alt="Banner" />
     <div class="absolute inset-0 bg-black/30"></div>
     <div class="absolute inset-0 flex items-center justify-center">
-      <h1 class="text-white text-2xl md:text-3xl font-bold">Selamat Datang di Timeline Progress</h1>
+      <h1 class="text-white text-2xl md:text-3xl font-bold">Dashboard IT</h1>
     </div>
   </section>
 
@@ -66,7 +66,7 @@
     <div class="max-w-6xl mx-auto px-5 mt-8 space-y-8">
       @foreach ($projects as $project)
         @php
-          // Ring rata-rata dari update terbaru tiap progress
+          // hitung cincin dari update terbaru per progress
           $latestPercents = [];
           foreach ($project->progresses as $pr) {
             $last = $pr->updates->sortByDesc('update_date')->first();
@@ -75,25 +75,20 @@
           $realization = count($latestPercents)
             ? (int) round(array_sum($latestPercents) / max(count($latestPercents), 1))
             : 0;
-          $size = 110; $stroke = 12; $r = $size/2 - $stroke; $circ = 2 * M_PI * $r; $off = $circ * (1 - $realization/100);
 
-          // Selesai jika semua progress sudah memenuhi target dan dikonfirmasi
-          $allMetAndConfirmed = $project->progresses->every(function ($pr) {
-            $last = $pr->updates->sortByDesc('update_date')->first();
-            $realisasi = $last ? (int)($last->progress_percent ?? ($last->percent ?? 0)) : 0;
-            return $realisasi >= (int)$pr->desired_percent && !is_null($pr->confirmed_at);
-          });
+          $size=110; $stroke=12; $r=$size/2-$stroke; $circ=2*M_PI*$r; $off=$circ*(1-$realization/100);
 
-          $isProjectDev = (int)($project->developer_id ?? 0) === (int)auth()->id() || auth()->user()?->role === 'it';
+          // status dari accessor model
+          $statusText  = $project->status_text;
+          $statusColor = $project->status_color;
+
+          // untuk hak edit progress: owner progress (IT) boleh edit/update sebelum dikonfirmasi
+          $authId = (int) auth()->id();
         @endphp
 
         <div class="rounded-2xl border-2 border-[#7A1C1C] bg-[#F2DCDC] p-5">
           {{-- HEADER PROJECT --}}
-          <div class="grid md:grid-cols-[auto,1fr,auto] items-start gap-4">
-            <div class="text-xs font-semibold {{ $allMetAndConfirmed ? 'text-green-700' : 'text-[#7A1C1C]' }}">
-              {{ $allMetAndConfirmed ? 'Project Selesai' : 'Dalam Proses' }}
-            </div>
-
+          <div class="grid md:grid-cols-[1fr,auto] items-start gap-4">
             <div class="flex items-center gap-5">
               <svg width="{{ $size }}" height="{{ $size }}" viewBox="0 0 {{ $size }} {{ $size }}">
                 <circle cx="{{ $size/2 }}" cy="{{ $size/2 }}" r="{{ $r }}" stroke="#D9B2B2" stroke-width="{{ $stroke }}" fill="none" opacity=".5"/>
@@ -125,45 +120,14 @@
               </div>
             </div>
 
-       {{-- Tombol Tambah Progress (khusus IT/dev project) - LETAK LEBIH KE BAWAH --}}
-@if ($isProjectDev)
-  <div class="col-span-full mt-4 md:mt-6 flex justify-end">
-    <button type="button"
-            class="btn-toggle-progress inline-flex items-center gap-2 rounded-xl bg-[#7A1C1C] text-white px-4 py-2 text-sm font-semibold shadow hover:bg-[#6a1717]"
-            data-target="progressForm-{{ $project->id }}">
-      <span class="grid place-items-center w-6 h-6 rounded-full bg-white/20 text-white">+</span>
-      Tambah Progress
-    </button>
-  </div>
-@endif
-
-          </div>
-
-          {{-- FORM TAMBAH PROGRESS (HIDDEN) --}}
-          @if ($isProjectDev)
-            <div id="progressForm-{{ $project->id }}" class="hidden mt-3 rounded-xl bg-white p-4 border border-[#E7C9C9]">
-              <div class="font-semibold mb-2">Tambah Progress untuk Project ini</div>
-              <form method="POST" action="{{ route('projects.progresses.store', $project->id) }}"
-                    class="grid grid-cols-1 md:grid-cols-5 gap-2">
-                @csrf
-                <input name="name" required placeholder="Nama Progress"
-                       class="rounded-xl bg-[#E2B9B9]/40 border border-[#C89898] px-3 py-2 outline-none md:col-span-2">
-                <input type="date" name="start_date" required
-                       class="rounded-xl bg-[#E2B9B9]/40 border border-[#C89898] px-3 py-2 outline-none">
-                <input type="date" name="end_date" required
-                       class="rounded-xl bg-[#E2B9B9]/40 border border-[#C89898] px-3 py-2 outline-none">
-                <select name="desired_percent" required
-                        class="rounded-xl bg-[#E2B9B9]/40 border border-[#C89898] px-3 py-2 outline-none">
-                  @for ($i = 0; $i <= 100; $i += 5)
-                    <option value="{{ $i }}">{{ $i }}%</option>
-                  @endfor
-                </select>
-                <button class="rounded-xl border-2 border-[#7A1C1C] bg-[#E2B9B9] px-4 py-2 font-semibold hover:bg-[#D9AFAF]">
-                  Tambah
-                </button>
-              </form>
+            {{-- BADGE STATUS --}}
+            <div class="flex items-start justify-end">
+              <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
+                    style="color: {{ $statusColor }}; background-color: {{ $project->completed_at ? '#DCFCE7' : '#FEE2E2' }};">
+                {{ $statusText }}
+              </span>
             </div>
-          @endif
+          </div>
 
           {{-- LIST PROGRESS --}}
           <div class="mt-4">
@@ -173,18 +137,17 @@
                   $last      = $pr->updates->sortByDesc('update_date')->first();
                   $realisasi = $last ? (int)($last->percent ?? ($last->progress_percent ?? 0)) : 0;
 
-                  $isOwner           = (int)($pr->created_by ?? 0) === (int)auth()->id();  // hanya pembuat
-                  $alreadyConfirmed  = !is_null($pr->confirmed_at);
-                  $canUpdate         = $isOwner && !$alreadyConfirmed;
-                  $canConfirmBase    = $realisasi >= (int)$pr->desired_percent && !$alreadyConfirmed;
-                  $canConfirm        = $isOwner && $canConfirmBase;
+                  $isOwner          = (int)($pr->created_by ?? 0) === $authId;
+                  $alreadyConfirmed = !is_null($pr->confirmed_at);
+                  $canUpdate        = $isOwner && !$alreadyConfirmed;
+                  $canConfirm       = false; // IT tidak melakukan finalisasi project di dashboard ini
                 @endphp
 
                 <div class="rounded-2xl bg-[#E6CACA] p-4">
                   <div class="flex items-start justify-between">
                     <div class="font-semibold">Progress {{ $loop->iteration }} — {{ $pr->name }}</div>
 
-                    {{-- Edit/Hapus hanya milik owner progress, dan dimatikan jika sudah dikonfirmasi --}}
+                    {{-- Edit/Hapus hanya untuk owner dan sebelum dikonfirmasi --}}
                     @if ($isOwner)
                       <div class="flex gap-2">
                         <a href="{{ route('progresses.edit', $pr->id) }}"
@@ -226,8 +189,8 @@
                     </div>
                   </div>
 
-                  {{-- AKSI: Update & Konfirmasi --}}
-                  <div class="mt-3 flex flex-wrap gap-3 items-center">
+                  {{-- UPDATE (tanpa tombol Konfirmasi di IT) --}}
+                  <div class="mt-3">
                     <form method="POST" action="{{ route('progresses.updates.store', $pr->id) }}" class="flex flex-wrap gap-3 items-center">
                       @csrf
                       <input type="date" name="update_date" value="{{ now()->toDateString() }}"
@@ -240,23 +203,13 @@
                       </button>
                     </form>
 
-                    @if(!$alreadyConfirmed)
-                      <form method="POST" action="{{ route('progresses.confirm', $pr->id) }}">
-                        @csrf
-                        <button class="rounded-xl bg-green-700 text-white px-4 py-2 text-sm font-semibold disabled:opacity-50"
-                                {{ $canConfirm ? '' : 'disabled' }}
-                                title="{{ $isOwner ? 'Belum mencapai target' : 'Hanya pembuat progress yang dapat konfirmasi' }}">
-                          Konfirmasi
-                        </button>
-                      </form>
-                    @else
-                      <span class="inline-flex items-center rounded-full bg-green-100 text-green-700 px-3 py-1 text-xs font-semibold">
+                    @if($alreadyConfirmed)
+                      <span class="inline-flex items-center rounded-full bg-green-100 text-green-700 px-3 py-1 text-xs font-semibold mt-2">
                         Sudah dikonfirmasi
                       </span>
                     @endif
                   </div>
 
-                  {{-- Catatan kecil untuk non-owner --}}
                   @unless ($isOwner)
                     <p class="mt-2 text-xs text-gray-600">
                       *Progress ini dibuat oleh {{ $pr->creator->name ?? '—' }}. Anda hanya dapat melihat tanpa mengubah.
@@ -264,14 +217,14 @@
                   @endunless
                 </div>
               @empty
-                <div class="rounded-xl bg-[#E6CACA] p-4 text-sm text-gray-700">Belum ada progress.</div>
+                <div class="rounded-2xl bg-[#E6CACA] p-4 text-sm text-gray-700">Belum ada progress.</div>
               @endforelse
             </div>
           </div>
 
-          {{-- DETAIL PROJECT --}}
+          {{-- DETAIL --}}
           <div class="mt-4 flex justify-end">
-            <a href="{{ route('projects.show', $project->id) }}"
+            <a href="{{ route('semua.progresses', $project->id) }}"
                class="inline-flex items-center rounded-xl border-2 border-[#7A1C1C] text-[#7A1C1C] px-4 py-2 text-sm font-semibold bg-white hover:bg-[#FFF2F2]">
               Detail Informasi
             </a>
@@ -292,20 +245,9 @@
     // dropdown
     const menuBtn = document.getElementById('menuBtn');
     const menuPanel = document.getElementById('menuPanel');
-    menuBtn?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      menuPanel.classList.toggle('hidden');
-    });
+    menuBtn?.addEventListener('click', (e) => { e.stopPropagation(); menuPanel.classList.toggle('hidden'); });
     menuPanel?.addEventListener('click', (e) => e.stopPropagation());
     document.addEventListener('click', () => menuPanel?.classList.add('hidden'));
-
-    // toggle form "Tambah Progress" per project
-    document.querySelectorAll('.btn-toggle-progress').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.getAttribute('data-target');
-        document.getElementById(id)?.classList.toggle('hidden');
-      });
-    });
   </script>
 </body>
 </html>

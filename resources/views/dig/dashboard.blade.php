@@ -142,10 +142,26 @@
                         @endphp
 
                         {{-- HEADER PROJECT: STATUS + CINCIN + INFO + AKSI --}}
-                        <div class="grid md:grid-cols-[auto,1fr,auto] items-start gap-4">
-                            <div class="text-xs font-semibold {{ $allMetAndConfirmed ? 'text-green-700' : 'text-[#7A1C1C]' }}">
-                                {{ $allMetAndConfirmed ? 'Project Selesai' : 'Dalam Proses' }}
-                            </div>
+                       @php
+    // status global project (pakai helper dari model bila ada eager loading)
+    $statusText  = $project->status_text ?? ($project->completed_at
+                    ? ($project->meets_requirement ? 'Project Selesai, Memenuhi' : 'Project Selesai, Tidak Memenuhi')
+                    : 'Dalam Proses');
+    $statusColor = $project->status_color ?? ($project->completed_at
+                    ? ($project->meets_requirement ? '#166534' : '#7A1C1C')
+                    : '#7A1C1C');
+
+    // Kapan tombol muncul?
+    // - semua progress telah dikonfirmasi & capai target (sudah kamu hitung di $allMetAndConfirmed)
+    // - dan status belum diputuskan (completed_at null ATAU meets_requirement masih null)
+    $canDecideCompletion = $allMetAndConfirmed && (is_null($project->meets_requirement));
+@endphp
+
+<div class="grid md:grid-cols-[auto,1fr,auto] items-start gap-4">
+    <div class="text-xs font-semibold" style="color: {{ $statusColor }}">
+        {{ $statusText }}
+    </div>
+
 
                             <div class="flex items-center gap-5">
                                 <svg width="{{ $size }}" height="{{ $size }}" viewBox="0 0 {{ $size }} {{ $size }}">
@@ -187,6 +203,25 @@
                             </div>
 
                             <div class="flex items-start gap-2 justify-end">
+
+                                {{-- TOMBOL MEMENUHI / TIDAK MEMENUHI --}}
+@if($canDecideCompletion)
+    <form method="POST" action="{{ route('projects.setCompletion', $project->id) }}" class="mr-2">
+        @csrf @method('PATCH')
+        <input type="hidden" name="meets" value="1">
+        <button class="px-3 py-1.5 text-xs rounded-full bg-green-700 text-white hover:opacity-90">
+            Memenuhi
+        </button>
+    </form>
+    <form method="POST" action="{{ route('projects.setCompletion', $project->id) }}" class="mr-2">
+        @csrf @method('PATCH')
+        <input type="hidden" name="meets" value="0">
+        <button class="px-3 py-1.5 text-xs rounded-full bg-[#7A1C1C] text-white hover:opacity-90">
+            Tidak Memenuhi
+        </button>
+    </form>
+@endif
+
                                 {{-- EDIT --}}
                                 <a href="{{ route('projects.edit', $project->id) }}"
                                     class="p-2 rounded-lg bg-white/60 hover:bg-white border" title="Edit Project">

@@ -37,17 +37,27 @@
         </div>
       </div>
     </div>
+
+    
   </header>
 
   <main class="max-w-6xl mx-auto px-5 py-6">
     <div class="flex items-center justify-between">
-      <h1 class="text-lg font-semibold">Notifikasi</h1>
-      @if(($unreadCount ?? 0) > 0)
-        <span class="inline-flex items-center justify-center min-w-[1.5rem] h-6 rounded-full bg-[#7A1C1C] text-white text-xs px-2">
-          {{ $unreadCount }}
-        </span>
-      @endif
-    </div>
+  <h1 class="text-lg font-semibold">Notifikasi</h1>
+  <div class="flex items-center gap-3">
+    @if(($unreadCount ?? 0) > 0)
+      <span class="inline-flex items-center justify-center min-w-[1.5rem] h-6 rounded-full bg-[#7A1C1C] text-white text-xs px-2">
+        {{ $unreadCount }}
+      </span>
+      <form method="POST" action="{{ route('supervisor.notifications.readAll') }}">
+        @csrf
+        <button class="text-xs rounded-lg border px-3 py-1 bg-white hover:bg-red-50 border-red-200 text-[#7A1C1C]">
+          Tandai semua terbaca
+        </button>
+      </form>
+    @endif
+  </div>
+</div>
 
     <div class="relative my-4">
       <hr class="border-[#D7B9B9]">

@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Str; // <-- ditambahkan
 
 // Notifikasi
 use App\Notifications\ProgressConfirmed;            // notif ke DIG saat IT konfirmasi
@@ -183,11 +184,9 @@ class ProgressController extends Controller
         }
 
         // ===== Notifikasi SUPERVISOR =====
-        // Kelompokkan progress berdasarkan role pembuatnya
         $itGroup  = $project->progresses->filter(fn($p) => ($p->creator?->role ?? null) === 'it');
         $digGroup = $project->progresses->filter(fn($p) => ($p->creator?->role ?? null) === 'digital_banking');
 
-        // Done per role (HARUS ada progress di grup itu)
         $itDone  = $itGroup->isNotEmpty()  && $itGroup->every(fn($p) => (bool) $p->confirmed_at);
         $digDone = $digGroup->isNotEmpty() && $digGroup->every(fn($p) => (bool) $p->confirmed_at);
 
@@ -211,7 +210,6 @@ class ProgressController extends Controller
         } elseif ($digDone) {
             $notifySup(array_merge($payloadCommon, ['status' => 'dig_done']));
         }
-        // (opsional) else: tidak kirim apapun saat sebagian belum selesai
 
         return back()->with('success', $allDone ? 'Project selesai dikonfirmasi.' : 'Progress selesai dikonfirmasi.');
     }
