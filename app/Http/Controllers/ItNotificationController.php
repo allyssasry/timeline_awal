@@ -1,45 +1,48 @@
 <?php
 
+// app/Http/Controllers/ItNotificationController.php
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 class ItNotificationController extends Controller
-{  public function index(Request $request)
+{
+    public function index(Request $request)
     {
         $user = $request->user();
         if (!$user) abort(401);
         if ($user->role !== 'it') abort(403, 'Khusus pengguna IT.');
 
+        // Jenis notifikasi yang ditampilkan
         $types = ['dig_project_created', 'dig_completion_decision'];
 
-        // Hitung "hari ini" di Asia/Jakarta, lalu convert ke UTC (kolom created_at disimpan UTC)
+        // Rentang "hari ini" di Asia/Jakarta -> UTC (kolom created_at disimpan UTC)
         $tz       = 'Asia/Jakarta';
         $startJak = Carbon::now($tz)->startOfDay();
         $endJak   = Carbon::now($tz)->endOfDay();
         $startUtc = $startJak->clone()->timezone('UTC');
         $endUtc   = $endJak->clone()->timezone('UTC');
 
-        // Notifikasi hari ini
+        // Hari ini
         $today = $user->notifications()
             ->whereBetween('created_at', [$startUtc, $endUtc])
             ->whereIn('data->type', $types)
             ->latest()
             ->get();
 
-        // Badge unread
+        // Badge unread (semua)
         $unreadCount = $user->unreadNotifications()
             ->whereIn('data->type', $types)
             ->count();
 
-        // Semua notifikasi (kalau mau dipakai)
+        // Semua (untuk pagination/arsip jika dipakai)
         $notifications = $user->notifications()
             ->whereIn('data->type', $types)
             ->latest()
             ->paginate(20);
 
-        return view('it.notifications', compact('today','unreadCount','notifications'));
+        return view('it.notifications', compact('today', 'unreadCount', 'notifications'));
     }
 
     public function markAllRead(Request $request)
@@ -64,6 +67,4 @@ class ItNotificationController extends Controller
 
         return back();
     }
-
-
 }

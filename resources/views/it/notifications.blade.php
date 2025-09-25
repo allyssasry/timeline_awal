@@ -80,97 +80,94 @@
       @endif
     </div>
 
-    <div class="space-y-3">
-      @forelse(($today ?? collect()) as $n)
-        @php
-          $d        = $n->data ?? [];
-          $type     = strtolower($d['type'] ?? '');
-          $pName    = $d['project_name'] ?? 'Project';
-          $pId      = $d['project_id']   ?? null;
-          $message  = $d['message']      ?? '';
-          $decision = strtolower($d['decision'] ?? ''); // 'memenuhi' | 'tidak_memenuhi'
-          $isUnread = is_null($n->read_at);
+    
+  <div class="space-y-3">
+    @forelse(($today ?? collect()) as $n)
+      @php
+        $d        = $n->data ?? [];
+        $type     = strtolower($d['type'] ?? '');
+        $pName    = $d['project_name'] ?? 'Project';
+        $pId      = $d['project_id']   ?? null;
+        $message  = $d['message']      ?? '';
+        $decision = strtolower($d['decision'] ?? ''); // 'memenuhi' | 'tidak_memenuhi'
+        $isUnread = is_null($n->read_at);
 
-          // Waktu notifikasi -> WIB
-          $created  = optional($n->created_at)->timezone('Asia/Jakarta');
-          $dateText = $created ? $created->format('d M Y') : '-';
-          $timeText = $created ? $created->format('H.i')   : '-';
-        @endphp
+        $created  = optional($n->created_at)->timezone('Asia/Jakarta');
+        $dateText = $created ? $created->format('d M Y') : '-';
+        $timeText = $created ? $created->format('H.i')   : '-';
+      @endphp
 
-        <div class="rounded-xl px-5 py-4 border {{ $isUnread ? 'border-[#7A1C1C] bg-[#F2DCDC]' : 'border-[#E7C9C9] bg-white' }}">
-          <div class="flex items-start justify-between gap-4">
-            <div class="min-w-0">
+      <div class="rounded-xl px-5 py-4 border {{ $isUnread ? 'border-[#7A1C1C] bg-[#F2DCDC]' : 'border-[#E7C9C9] bg-white' }}">
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0">
 
-              {{-- 1) Project baru dibuat --}}
-              @if($type === 'dig_project_created')
-                <div class="text-[15px] font-semibold">Project Baru Dibuat</div>
-                <div class="mt-1 text-sm">
-                  <div><span class="font-semibold">Nama Project</span>: {{ $pName }}</div>
-                  <div class="mt-1"><span class="font-semibold">Tanggal</span>: {{ $dateText }} • {{ $timeText }} WIB</div>
-                  @if($message)
-                    <div class="text-gray-700 mt-1">{{ $message }}</div>
-                  @endif
-                </div>
-
-              {{-- 2) Keputusan MEMENUHI / TIDAK MEMENUHI --}}
-              @elseif($type === 'dig_completion_decision')
-                @php
-                  $statusLabel = $d['status_label'] ?? (
-                    $decision === 'memenuhi' ? 'Project Selesai, Memenuhi' : 'Project Selesai, Tidak Memenuhi'
-                  );
-                  $isMeet = ($decision === 'memenuhi');
-                @endphp
-
-                <div class="text-[15px] font-semibold">Keputusan Penyelesaian Project</div>
-                <div class="mt-1 text-sm">
-                  <div><span class="font-semibold">Nama Project</span>: {{ $pName }}</div>
-                  <div class="mt-1">
-                    <span class="font-semibold">Status</span>:
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold
-                                 {{ $isMeet ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }}">
-                      {{ $statusLabel }}
-                    </span>
-                  </div>
-                  <div class="mt-1"><span class="font-semibold">Tanggal</span>: {{ $dateText }} • {{ $timeText }} WIB</div>
-                  @if($message)
-                    <div class="text-gray-700 mt-1">{{ $message }}</div>
-                  @endif
-                </div>
-
-              {{-- Fallback --}}
-              @else
-                <div class="text-[15px] font-semibold">Notifikasi</div>
-                <div class="mt-1 text-sm">
-                  <div class="text-gray-700">{{ $message ?: 'Ada pembaruan.' }}</div>
-                  <div class="mt-1 text-xs text-gray-600">{{ $dateText }} • {{ $timeText }} WIB</div>
-                </div>
-              @endif
-
-            </div>
-
-            {{-- Sisi kanan: waktu & aksi --}}
-            <div class="text-right shrink-0">
-              <div class="text-xs text-gray-600">{{ $timeText }}</div>
-              <div class="mt-2 flex items-center gap-2 justify-end">
-                @if($pId)
-                  {{-- Jika detail project IT ada route khusus, ganti 'dig.projects.show' ke route IT --}}
-                  <a href="{{ route('dig.projects.show', $pId) }}" class="text-xs underline text-[#7A1C1C]">Lihat Project</a>
-                @endif
-                @if($isUnread)
-                  <form method="POST" action="{{ route('it.notifications.read', $n->id) }}">
-                    @csrf
-                    <button class="text-xs underline text-[#7A1C1C]">Tandai terbaca</button>
-                  </form>
+            {{-- 1) Project Baru Dibuat --}}
+            @if($type === 'dig_project_created')
+              <div class="text-[15px] font-semibold">Project Baru Dibuat</div>
+              <div class="mt-1 text-sm">
+                <div><span class="font-semibold">Nama Project</span>: {{ $pName }}</div>
+                <div class="mt-1"><span class="font-semibold">Tanggal</span>: {{ $dateText }} • {{ $timeText }} WIB</div>
+                @if($message)
+                  <div class="text-gray-700 mt-1">{{ $message }}</div>
                 @endif
               </div>
+
+            {{-- 2) Keputusan Memenuhi / Tidak Memenuhi --}}
+            @elseif($type === 'dig_completion_decision')
+              @php
+                $statusLabel = $d['status_label'] ?? (
+                  $decision === 'memenuhi' ? 'Project Selesai, Memenuhi' : 'Project Selesai, Tidak Memenuhi'
+                );
+                $isMeet = ($decision === 'memenuhi');
+              @endphp
+
+              <div class="text-[15px] font-semibold">Keputusan Penyelesaian Project</div>
+              <div class="mt-1 text-sm">
+                <div><span class="font-semibold">Nama Project</span>: {{ $pName }}</div>
+                <div class="mt-1">
+                  <span class="font-semibold">Status</span>:
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold
+                               {{ $isMeet ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }}">
+                    {{ $statusLabel }}
+                  </span>
+                </div>
+                <div class="mt-1"><span class="font-semibold">Tanggal</span>: {{ $dateText }} • {{ $timeText }} WIB</div>
+                @if($message)
+                  <div class="text-gray-700 mt-1">{{ $message }}</div>
+                @endif
+              </div>
+
+            {{-- Fallback --}}
+            @else
+              <div class="text-[15px] font-semibold">Notifikasi</div>
+              <div class="mt-1 text-sm">
+                <div class="text-gray-700">{{ $message ?: 'Ada pembaruan.' }}</div>
+                <div class="mt-1 text-xs text-gray-600">{{ $dateText }} • {{ $timeText }} WIB</div>
+              </div>
+            @endif
+          </div>
+
+          <div class="text-right shrink-0">
+            <div class="text-xs text-gray-600">{{ $timeText }}</div>
+            <div class="mt-2 flex items-center gap-2 justify-end">
+              @if($pId)
+                <a href="{{ route('dig.projects.show', $pId) }}" class="text-xs underline text-[#7A1C1C]">Lihat Project</a>
+              @endif
+              @if($isUnread)
+                <form method="POST" action="{{ route('it.notifications.read', $n->id) }}">
+                  @csrf
+                  <button class="text-xs underline text-[#7A1C1C]">Tandai terbaca</button>
+                </form>
+              @endif
             </div>
           </div>
         </div>
-      @empty
-        <div class="text-sm text-gray-600">Belum ada notifikasi hari ini.</div>
-      @endforelse
-    </div>
-  </main>
+      </div>
+    @empty
+      <div class="text-sm text-gray-600">Belum ada notifikasi hari ini.</div>
+    @endforelse
+  </div>
+</main>
 
   <script>
     // Dropdown menu

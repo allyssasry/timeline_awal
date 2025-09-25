@@ -65,11 +65,6 @@ Route::prefix('supervisor')
             ->name('projects.show');   // ← cukup "projects.show", karena sudah ada prefix 'supervisor.'
     });
 
-    Route::middleware(['auth'])->group(function () {
-    Route::get('/it/notifications', [ItNotificationController::class, 'index'])->name('it.notifications');
-    Route::post('/it/notifications/read-all', [ItNotificationController::class, 'markAllRead'])->name('it.notifications.readAll');
-    Route::post('/it/notifications/{id}/read', [ItNotificationController::class, 'markRead'])->name('it.notifications.read');
-});
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/supervisor/dashboard', [SupervisorDashboardController::class, 'index'])
@@ -288,3 +283,18 @@ Route::post('/it/notifications/read/{id}', [\App\Http\Controllers\DigNotificatio
     ->name('it.notifications.read');
 Route::post('/it/notifications/read-all', [\App\Http\Controllers\DigNotificationController::class, 'itMarkAllRead'])
     ->name('it.notifications.readAll');
+
+    
+Route::middleware(['auth'])->group(function () {
+    // tombol Memenuhi/Tidak Memenuhi (DIG)
+    Route::patch('/projects/{project}/completion', [ProjectController::class, 'setCompletion'])
+        ->name('projects.setCompletion');
+
+    // Notifikasi IT
+    Route::get('/it/notifications', [ItNotificationController::class, 'index'])
+        ->name('it.notifications');
+    Route::post('/it/notifications/read-all', [ItNotificationController::class, 'markAllRead'])
+        ->name('it.notifications.readAll');
+    Route::post('/it/notifications/{id}/read', [ItNotificationController::class, 'markRead'])
+        ->name('it.notifications.read');
+});

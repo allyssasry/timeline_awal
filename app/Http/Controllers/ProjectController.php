@@ -6,12 +6,11 @@ use App\Models\Project;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Http\Request;
-// HAPUS: use App\Models\Notification;  // tidak dipakai lagi
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Notifications\SupervisorNotification;
-use App\Notifications\DigCompletionDecision; // <— TAMBAHKAN
+use App\Notifications\DigCompletionDecision;
 
 class ProjectController extends Controller
 {
@@ -213,32 +212,33 @@ class ProjectController extends Controller
 
     /** Finalisasi: Memenuhi / Tidak Memenuhi (khusus DIG) */
    
-public function setCompletion(Request $request, Project $project)
-{
-    // Batasi role (opsional tapi disarankan)
-    if (auth()->user()?->role !== 'digital_banking') {
-        abort(403, 'Hanya Digital Banking yang dapat memutuskan penyelesaian.');
+  public function setCompletion(Request $request, Project $project)
+    {
+        // Opsional: batasi hanya DIG
+        if (auth()->user()?->role !== 'digital_banking') {
+            abort(403, 'Hanya Digital Banking yang dapat memutuskan penyelesaian.');
+        }
+
+        $data = $request->validate([
+            'meets' => ['required','in:0,1'],
+        ]);
+
+        // Simpan status
+        $project->completed_at      = $project->completed_at ?? now();
+        $project->meets_requirement = (bool) ((int) $data['meets']);
+        $project->save();
+
+        // Kirim notifikasi ke developer (IT) yang ditetapkan pada project
+        if ($dev = User::find($project->developer_id)) {
+            $dev->notify(new DigCompletionDecision(
+                projectId:   $project->id,
+                projectName: $project->name,
+                meets:       $project->meets_requirement,
+                byId:        auth()->id(),
+                byName:      auth()->user()?->name
+            ));
+        }
+
+        return back()->with('success', 'Status penyelesaian project diperbarui.');
     }
-
-    $data = $request->validate([
-        'meets' => ['required','in:0,1'],
-    ]);
-
-    $project->completed_at      = $project->completed_at ?? now();
-    $project->meets_requirement = (bool) ((int) $data['meets']);
-    $project->save();
-
-    // KIRIM NOTIFIKASI ke developer proyek (user IT)
-    if ($dev = User::find($project->developer_id)) {
-        $dev->notify(new DigCompletionDecision(
-            projectId:   $project->id,
-            projectName: $project->name,
-            meets:       $project->meets_requirement,
-            byId:        auth()->id(),
-            byName:      auth()->user()?->name
-        ));
-    }
-
-    return back()->with('success','Status penyelesaian project diperbarui.');
-}
 }
