@@ -14,6 +14,12 @@ use App\Notifications\DigCompletionDecision;
 
 class ProjectController extends Controller
 {
+    // NEW: pastikan semua aksi butuh login
+    public function __construct() // NEW
+    {
+        $this->middleware('auth'); // NEW
+    } // NEW
+
     /** Modal tambah project (DIG) */
     public function create()
     {
@@ -141,9 +147,15 @@ class ProjectController extends Controller
     /** Detail project */
     public function show(Project $project)
     {
+        // NEW: urutkan updates terbaru + muat notes dan creator
         $project->load([
-            'progresses.creator:id,name,role',
-            'progresses.updates',
+            'progresses' => function ($q) { // NEW
+                $q->with([
+                    'creator:id,name,role',     // NEW
+                    'updates' => fn($u) => $u->orderByDesc('update_date'), // NEW
+                    'notes',                     // NEW (jika ada relasi)
+                ]);
+            },
             'digitalBanking:id,name,username',
             'developer:id,name,username',
             'creator:id,name',
@@ -211,8 +223,7 @@ class ProjectController extends Controller
     }
 
     /** Finalisasi: Memenuhi / Tidak Memenuhi (khusus DIG) */
-   
-  public function setCompletion(Request $request, Project $project)
+    public function setCompletion(Request $request, Project $project)
     {
         // Opsional: batasi hanya DIG
         if (auth()->user()?->role !== 'digital_banking') {
@@ -223,7 +234,12 @@ class ProjectController extends Controller
             'meets' => ['required','in:0,1'],
         ]);
 
-        // Simpan status
+        // NEW: Idempotent — jika sudah diputuskan, jangan bisa diubah lagi
+        if (!is_null($project->meets_requirement)) { // NEW
+            return back()->with('info', 'Project sudah difinalisasi sebelumnya.'); // NEW
+        } // NEW
+
+        // Simpan status final
         $project->completed_at      = $project->completed_at ?? now();
         $project->meets_requirement = (bool) ((int) $data['meets']);
         $project->save();

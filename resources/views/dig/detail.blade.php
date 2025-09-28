@@ -7,9 +7,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* Cegah “geser ke kanan” saat scrollbar muncul/hilang */
-    html { scrollbar-gutter: stable; }           /* Chrome/Edge/Firefox modern */
-    body { overflow-x: hidden; }                 /* Antisipasi overflow horizontal */
+    html { scrollbar-gutter: stable; }
+    body { overflow-x: hidden; }
   </style>
 </head>
 
@@ -24,9 +23,52 @@
   </header>
 
   <div class="max-w-6xl mx-auto px-5 py-6">
-    {{-- BARIS JUDUL/AKSI --}}
+    {{-- ====== STATUS PROJECT + LOGIKA FINALISASI ====== --}}
+    @php
+      // 1) Cek apakah semua progress sudah capai target dan dikonfirmasi
+      $allMetAndConfirmed = $project->progresses->every(function ($pr) {
+          $last = $pr->updates->sortByDesc('update_date')->first();
+          $real = $last ? (int)($last->percent ?? $last->progress_percent ?? 0) : 0;
+          return $real >= (int)$pr->desired_percent && !is_null($pr->confirmed_at);
+      });
+
+      // 2) Default status (sebelum finalisasi)
+      $statusText  = 'Dalam Proses';
+      $statusColor = '#7A1C1C';
+      $statusBg    = '#FEF2F2';
+
+      // 3) “Siap difinalisasi” bila semua progress sudah memenuhi & belum ada keputusan
+      if ($allMetAndConfirmed && is_null($project->meets_requirement) && is_null($project->completed_at)) {
+          $statusText  = 'Siap difinalisasi';
+          $statusColor = '#92400E'; // amber
+          $statusBg    = '#FFFBEB';
+      }
+
+      // 4) Jika sudah ada keputusan final (completed_at terisi)
+      if (!is_null($project->completed_at)) {
+          if ($project->meets_requirement === true) {
+              $statusText  = 'Project Selesai, Memenuhi';
+              $statusColor = '#166534';
+              $statusBg    = '#F0FDF4';
+          } elseif ($project->meets_requirement === false) {
+              $statusText  = 'Project Selesai, Tidak Memenuhi';
+              $statusColor = '#7A1C1C';
+              $statusBg    = '#FEE2E2';
+          } else {
+              // completed_at terisi namun keputusan null (kasus jarang)
+              $statusText  = 'Project Selesai';
+              $statusColor = '#334155';
+              $statusBg    = '#F1F5F9';
+          }
+      }
+
+      // 5) Tombol finalisasi muncul hanya jika semua progress selesai & belum ada keputusan
+      $canDecideCompletion = $allMetAndConfirmed && is_null($project->meets_requirement);
+    @endphp
+
+    {{-- BARIS JUDUL/AKSI (judul ikut status berjalan) --}}
     <div class="flex items-center justify-between">
-      <h1 class="text-[15px] md:text-[16px] font-semibold text-[#7A1C1C]">Dalam Proses</h1>
+      <h1 class="text-[15px] md:text-[16px] font-semibold text-[#7A1C1C]">{{ $statusText }}</h1>
       <a href="{{ route('dig.dashboard') }}"
          class="px-3 py-2 rounded-lg border border-[#7A1C1C] text-[#7A1C1C] bg-white hover:bg-[#FFF2F2] text-[12px] font-medium">
         Kembali
@@ -35,7 +77,11 @@
 
     {{-- RING + INFO HEADER + CTA TAMBAH PROGRESS --}}
     @php
-      $latest=[]; foreach($project->progresses as $p){ $u=$p->updates->sortByDesc('update_date')->first(); $latest[]=$u?(int)($u->percent??$u->progress_percent??0):0; }
+      $latest=[];
+      foreach($project->progresses as $p){
+        $u=$p->updates->sortByDesc('update_date')->first();
+        $latest[]=$u?(int)($u->percent??$u->progress_percent??0):0;
+      }
       $realization = count($latest)? (int) round(array_sum($latest)/max(count($latest),1)) : 0;
       $size=84; $stroke=10; $r=$size/2-$stroke; $circ=2*M_PI*$r; $off=$circ*(1-$realization/100);
     @endphp
@@ -92,6 +138,26 @@
           </span>
           Tambah Progress
         </button>
+
+        {{-- TOMBOL FINALISASI (hanya saat layak) --}}
+        @if($canDecideCompletion)
+          <div class="flex items-center gap-2 mt-1">
+            <form method="POST" action="{{ route('projects.setCompletion', $project->id) }}">
+              @csrf @method('PATCH')
+              <input type="hidden" name="meets" value="1">
+              <button class="px-3 py-1.5 text-xs rounded-full bg-green-700 text-white hover:opacity-90">
+                Memenuhi
+              </button>
+            </form>
+            <form method="POST" action="{{ route('projects.setCompletion', $project->id) }}">
+              @csrf @method('PATCH')
+              <input type="hidden" name="meets" value="0">
+              <button class="px-3 py-1.5 text-xs rounded-full bg-[#7A1C1C] text-white hover:opacity-90">
+                Tidak Memenuhi
+              </button>
+            </form>
+          </div>
+        @endif
       </div>
     </div>
 
@@ -125,14 +191,14 @@
     <div class="mt-6 space-y-5">
       @forelse($project->progresses as $i => $pr)
         @php
-          $last = $pr->updates->sortByDesc('update_date')->first();
-          $realisasi = $last ? (int)($last->percent ?? $last->progress_percent ?? 0) : 0;
+          $last       = $pr->updates->sortByDesc('update_date')->first();
+          $realisasi  = $last ? (int)($last->percent ?? $last->progress_percent ?? 0) : 0;
           $canConfirm = $realisasi >= (int)$pr->desired_percent && !$pr->confirmed_at;
 
-          /* ⬇️ Tambahan penting: hanya pembuat progress yang boleh Edit/Hapus/Update/Konfirmasi */
-          $isOwner = (int)($pr->created_by ?? 0) === (int)auth()->id();
-          $creator = $pr->creator ?? null; // pastikan relasi creator() -> belongsTo(User::class,'created_by')
-          $ownerRoleLabel = optional($creator)->role === 'digital_banking' ? 'DIG' : (optional($creator)->role === 'it' ? 'IT' : '—');
+          // Hanya pembuat progress yang boleh Edit/Hapus/Update/Konfirmasi
+          $isOwner         = (int)($pr->created_by ?? 0) === (int)auth()->id();
+          $creator         = $pr->creator ?? null;
+          $ownerRoleLabel  = optional($creator)->role === 'digital_banking' ? 'DIG' : (optional($creator)->role === 'it' ? 'IT' : '—');
         @endphp
 
         <section class="rounded-[16px] bg-[#E3BDBD]/60 border border-[#C99E9E] px-5 py-4">
@@ -183,13 +249,14 @@
           <div class="grid md:grid-cols-[1fr,1fr,340px] gap-6">
             {{-- INFO TIMELINE + RIWAYAT CHIP --}}
             <div class="text-[13px] leading-6">
-              <div><span class="inline-block w-40 text-gray-700">Timeline Mulai</span> :
-  {{ $pr->start_date ? \Illuminate\Support\Carbon::parse($pr->start_date)->timezone('Asia/Jakarta')->format('d M Y') : '-' }}
-</div>
-
-<div><span class="inline-block w-40 text-gray-700">Timeline Selesai</span> :
-  {{ $pr->end_date ? \Illuminate\Support\Carbon::parse($pr->end_date)->timezone('Asia/Jakarta')->format('d M Y') : '-' }}
-</div>
+              <div>
+                <span class="inline-block w-40 text-gray-700">Timeline Mulai</span> :
+                {{ $pr->start_date ? \Illuminate\Support\Carbon::parse($pr->start_date)->timezone('Asia/Jakarta')->format('d M Y') : '-' }}
+              </div>
+              <div>
+                <span class="inline-block w-40 text-gray-700">Timeline Selesai</span> :
+                {{ $pr->end_date ? \Illuminate\Support\Carbon::parse($pr->end_date)->timezone('Asia/Jakarta')->format('d M Y') : '-' }}
+              </div>
 
               <div><span class="inline-block w-40 text-gray-700">Target Progress</span> : {{ $pr->desired_percent }}%</div>
               <div><span class="inline-block w-40 text-gray-700">Realisasi Progress</span> : {{ $realisasi }}%</div>
@@ -234,7 +301,7 @@
             <div class="rounded-[14px] bg-white border border-[#E0BEBE] p-4">
               <div class="flex items-center justify-end mb-2">
                 @if($pr->confirmed_at)
-                  <span class="inline-block text-[11px] rounded-full bg-green-100 text-green-700 px-2 py-0.5">Project Selesai</span>
+                  <span class="inline-block text-[11px] rounded-full bg-green-100 text-green-700 px-2 py-0.5">Progress Selesai</span>
                 @endif
               </div>
 
@@ -295,7 +362,7 @@
               </form>
 
               {{-- TAMBAH CATATAN --}}
-              <div class="mt-4 text:[12px] text-[12px] text-gray-700 font-semibold mb-1">Tambah Catatan</div>
+              <div class="mt-4 text-[12px] text-gray-700 font-semibold mb-1">Tambah Catatan</div>
               <form method="POST" action="{{ route('progresses.notes.store', $pr->id) }}" class="space-y-2">
                 @csrf
                 <textarea name="body" rows="3" placeholder="Catatan"

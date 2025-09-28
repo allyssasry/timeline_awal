@@ -21,10 +21,10 @@
 
   // Label yang rapi per role
   $roleLabel = match ($role) {
-      'it'            => 'Developer',
+      'it'             => 'Developer',
       'digital_banking'=> 'DIG',
-      'supervisor'    => 'Supervisor',
-      default         => 'User',
+      'supervisor'     => 'Supervisor',
+      default          => 'User',
   };
 
   // Tentukan rute "Beranda" sesuai role, dengan fallback aman
@@ -139,6 +139,7 @@
     {{-- Daftar Arsip --}}
     @forelse ($projects as $project)
       @php
+        // ring progress
         $latestPercents = [];
         foreach ($project->progresses as $pr) {
           $last = $pr->updates->first();
@@ -146,13 +147,30 @@
         }
         $realization = count($latestPercents) ? (int) round(array_sum($latestPercents)/max(count($latestPercents),1)) : 0;
         $size=90; $stroke=12; $r=$size/2-$stroke; $circ=2*M_PI*$r; $off=$circ*(1-$realization/100);
-        $finishedAt = $project->finished_at_calc ?? $project->updated_at;
+
+        // tanggal selesai final → utamakan completed_at
+        $finishedAt = $project->completed_at ?? ($project->finished_at_calc ?? $project->updated_at);
+
+        // STATUS AKHIR (Memenuhi / Tidak Memenuhi)
+        $isMeet      = (bool) $project->meets_requirement;
+        $statusText  = $isMeet ? 'Memenuhi' : 'Tidak Memenuhi';
+        $statusClass = $isMeet
+            ? 'bg-green-100 text-green-700'
+            : 'bg-red-100 text-red-700';
+        $statusBarText = $isMeet ? 'Project Selesai, Memenuhi' : 'Project Selesai, Tidak Memenuhi';
       @endphp
 
       <section class="rounded-2xl border-2 border-[#7A1C1C] bg-[#F2DCDC] p-5 mb-6">
-        <div class="flex items-center justify-between text-xs text-[#7A1C1C] font-semibold mb-2">
-          <span>Project Telah Selesai</span>
-          <span class="text-gray-600">{{ optional($finishedAt)->translatedFormat('d F Y') }}</span>
+        {{-- Bar atas: status & tanggal keputusan --}}
+        <div class="flex items-center justify-between text-xs font-semibold mb-2">
+          <div class="inline-flex items-center gap-2">
+            <span class="inline-flex items-center px-2.5 py-1 rounded-full {{ $statusClass }}">
+              {{ $statusBarText }}
+            </span>
+          </div>
+          <span class="text-gray-600">
+            {{ optional($finishedAt)->timezone('Asia/Jakarta')->translatedFormat('d F Y • H.i') }} WIB
+          </span>
         </div>
 
         <div class="grid md:grid-cols-[auto,1fr,auto] items-start gap-5">
@@ -185,6 +203,21 @@
               <span class="text-gray-600">Deskripsi</span><span>:</span>
               <span>{{ $project->description ?: '-' }}</span>
             </div>
+
+            {{-- ====== Tambahan: Status Akhir ====== --}}
+            <div class="grid grid-cols-[auto_auto_1fr] gap-x-2">
+              <span class="text-gray-600">Status Akhir</span><span>:</span>
+              <span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold {{ $statusClass }}">
+                  {{ $statusText }}
+                </span>
+              </span>
+            </div>
+            <div class="grid grid-cols-[auto_auto_1fr] gap-x-2">
+              <span class="text-gray-600">Tanggal Keputusan</span><span>:</span>
+              <span>{{ optional($finishedAt)->timezone('Asia/Jakarta')->translatedFormat('d F Y • H.i') }} WIB</span>
+            </div>
+            {{-- ====== /Tambahan ====== --}}
           </div>
         </div>
 
@@ -210,13 +243,13 @@
             @endforelse
           </div>
         </div>
-         {{-- CTA (POSISI DI KANAN-BAWAH KARTU) --}}
-        <div class="mt-4 flex justify-end">
-          <a href="{{ route('supervisor.projects.show', $project->id) }}"
-   class="inline-flex items-center gap-2 rounded-lg border border-[#7A1C1C] px-3 py-1.5 text-xs font-semibold text-[#7A1C1C] bg-white hover:bg-[#FFF2F2]">
-  Detail Informasi
-</a>
 
+        {{-- CTA (POSISI DI KANAN-BAWAH KARTU) --}}
+        <div class="mt-4 flex justify-end">
+          <a href="{{ route('dig.projects.show', $project->id) }}"
+             class="inline-flex items-center gap-2 rounded-lg border border-[#7A1C1C] px-3 py-1.5 text-xs font-semibold text-[#7A1C1C] bg-white hover:bg-[#FFF2F2]">
+            Detail Informasi
+          </a>
         </div>
       </section>
     @empty

@@ -19,6 +19,7 @@ use App\Http\Controllers\SupervisorDashboardController;
 
 use App\Http\Controllers\SupervisorController;
 use App\Http\Controllers\SupervisorNotificationController;
+use App\Http\Controllers\ArsipController;
 
 Route::prefix('supervisor')
     ->name('supervisor.')
@@ -297,4 +298,13 @@ Route::middleware(['auth'])->group(function () {
         ->name('it.notifications.readAll');
     Route::post('/it/notifications/{id}/read', [ItNotificationController::class, 'markRead'])
         ->name('it.notifications.read');
+});
+
+// routes/web.php
+Route::get('/arsip', [\App\Http\Controllers\ArsipController::class, 'index'])
+    ->name('semua.arsip');
+
+Route::middleware(['auth'])->group(function () {
+    Route::patch('/projects/{project}/completion', [ProjectController::class, 'setCompletion'])
+        ->name('projects.setCompletion');
 });
