@@ -99,7 +99,8 @@ class ProjectController extends Controller
             }
 
             return $project;
-        });
+    });
+
 
         // === Notif ke IT (database notifications bawaan Laravel) ===
         if ($developer = User::find($project->developer_id)) {
@@ -246,8 +247,17 @@ class ProjectController extends Controller
             $real   = $latest ? (int)($latest->percent ?? $latest->progress_percent ?? 0) : 0;
             return $real >= (int)$pr->desired_percent && !is_null($pr->confirmed_at);
         }); // NEW
-        if (!$allMetAndConfirmed) { // NEW
-            return back()->with('error', 'Belum semua progress mencapai target & dikonfirmasi.'); // NEW
+
+        // ===================== NEW: skenario alternatif (ada 1 telat-unmet, lainnya confirmed) =====================
+        // Memakai helper di Model agar konsisten dengan Blade
+        $readyBecauseOverdue = method_exists($project, 'readyBecauseOverdue')
+            ? $project->readyBecauseOverdue()
+            : false;
+        // ==========================================================================================================
+
+        // Jika TIDAK memenuhi kedua skenario, tolak
+        if (!$allMetAndConfirmed && !$readyBecauseOverdue) { // NEW: tambahkan OR kondisi
+            return back()->with('error', 'Belum memenuhi syarat finalisasi: pastikan semua progress tercapai & terkonfirmasi, atau hanya tersisa progress yang sudah lewat timeline dan belum memenuhi sementara lainnya sudah terkonfirmasi.');
         } // NEW
 
         // Simpan status final

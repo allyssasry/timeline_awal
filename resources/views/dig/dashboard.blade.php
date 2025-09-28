@@ -142,6 +142,48 @@
                    })();
           @endphp
 
+          {{-- ======================= NEW: SIAP FINALISASI KARENA ADA YANG TELAT ======================= --}}
+          @php
+            // Skenario tambahan:
+            // Jika ADA minimal 1 progress yang sudah LEWAT timeline, BELUM dikonfirmasi, dan BELUM mencapai target,
+            // SEDANGKAN progress lainnya SUDAH dikonfirmasi => project boleh difinalisasi (tombol muncul).
+            $hasOverdueUnmet = false;
+            $othersAllConfirmed = true;
+
+            foreach ($project->progresses as $p2) {
+              $last2 = $p2->updates->first() ?: $p2->updates->sortByDesc('update_date')->first();
+              $real2 = $last2 ? (int)($last2->progress_percent ?? ($last2->percent ?? 0)) : 0;
+              $end2  = $p2->end_date ? \Illuminate\Support\Carbon::parse($p2->end_date)->startOfDay() : null;
+              $od2   = $end2 ? $end2->lt(now()->startOfDay()) : false;
+              $unmet2 = $od2 && is_null($p2->confirmed_at) && ($real2 < (int)$p2->desired_percent);
+
+              if ($unmet2) {
+                $hasOverdueUnmet = true;
+              }
+            }
+
+            if ($hasOverdueUnmet) {
+              // "Lainnya" dianggap confirmed: untuk setiap progress yang BUKAN unmet-overdue, harus confirmed
+              $othersAllConfirmed = $project->progresses->every(function($p3){
+                $last3 = $p3->updates->first() ?: $p3->updates->sortByDesc('update_date')->first();
+                $real3 = $last3 ? (int)($last3->progress_percent ?? ($last3->percent ?? 0)) : 0;
+                $end3  = $p3->end_date ? \Illuminate\Support\Carbon::parse($p3->end_date)->startOfDay() : null;
+                $od3   = $end3 ? $end3->lt(now()->startOfDay()) : false;
+                $unmet3 = $od3 && is_null($p3->confirmed_at) && ($real3 < (int)$p3->desired_percent);
+
+                // kalau progress ini unmet-overdue, luluskan saja (dia pengecualian);
+                // selain itu WAJIB sudah dikonfirmasi.
+                return $unmet3 ? true : !is_null($p3->confirmed_at);
+              });
+            }
+
+            $readyBecauseOverdue = $hasOverdueUnmet && $othersAllConfirmed; // NEW
+            if (is_null($project->meets_requirement)) {
+              $canDecideCompletion = $canDecideCompletion || $readyBecauseOverdue; // NEW (munculkan tombol)
+            }
+          @endphp
+          {{-- ======================= END NEW ======================= --}}
+
           <div class="rounded-2xl border-2 border-[#7A1C1C] bg-[#F2DCDC] p-5">
             {{-- HEADER PROJECT: STATUS + CINCIN + INFO + AKSI --}}
             <div class="grid md:grid-cols-[auto,1fr,auto] items-start gap-4">
@@ -191,7 +233,7 @@
 
               {{-- Aksi kanan --}}
               <div class="flex items-start gap-2 justify-end">
-                {{-- TOMBOL MEMENUHI / TIDAK MEMENUHI (muncul hanya jika boleh memutuskan) --}}
+                {{-- TOMBOL MEMENUHI / TIDAK MEMENUHI (muncul jika boleh memutuskan) --}}
                 @if($canDecideCompletion)
                   <form method="POST" action="{{ route('projects.setCompletion', $project->id) }}" class="mr-2">
                     @csrf @method('PATCH')
@@ -305,6 +347,11 @@
     $isUnmet   = $isOverdue && !$pr->confirmed_at && ($realisasi < (int)$pr->desired_percent); // NEW
   @endphp
 
+  @php
+    // NEW: kunci Update Progress jika sudah lewat timeline
+    $canUpdate = $canUpdate && !$isOverdue; // NEW
+  @endphp
+
                   <div class="rounded-2xl bg-[#E6CACA] p-4">
                     <div class="flex items-start justify-between mb-2">
                       <div class="font-semibold">Progress {{ $loop->iteration }} — {{ $pr->name }}
@@ -335,7 +382,7 @@
 
                     {{-- NEW: alert ringkas bila tidak memenuhi --}}
                     @if($isUnmet)
-                      <div class="mb-2 text-[12px] rounded-lg border border-red-300 bg-red-50 text-red-700 px-3 py-2">
+                      <div class="mb-2 text:[12px] text-[12px] rounded-lg border border-red-300 bg-red-50 text-red-700 px-3 py-2">
                         Melewati timeline selesai, realisasi belum mencapai target & belum dikonfirmasi. {{-- NEW --}}
                       </div>
                     @endif
@@ -391,6 +438,12 @@
                     {{-- UPDATE PROGRESS + KONFIRMASI --}}
                     <div class="mt-3">
                       {{-- UPDATE PROGRESS --}}
+                      @php
+                        // NEW: alasan nonaktif tombol update
+                        $updateDisabledReason = $isOverdue
+                          ? 'Tidak bisa update: sudah lewat timeline selesai'
+                          : ($alreadyConfirmed ? 'Sudah dikonfirmasi' : ($isOwner ? 'Hanya DIG yang bisa update' : 'Bukan pembuat progress'));
+                      @endphp
                       <form method="POST" action="{{ route('progresses.updates.store', $pr->id) }}" class="flex flex-wrap gap-3 items-center">
                         @csrf
                         <input type="date" name="update_date" value="{{ now()->toDateString() }}"
@@ -398,7 +451,8 @@
                         <input type="number" name="percent" min="0" max="100" placeholder="%"
                                class="rounded-xl border px-3 py-2 text-sm w-28" @unless($canUpdate) disabled @endunless required>
                         <button class="rounded-xl bg-[#7A1C1C] text-white px-4 py-2 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                                @unless($canUpdate) disabled title="{{ $alreadyConfirmed ? 'Sudah dikonfirmasi' : ($isOwner ? 'Hanya DIG yang bisa update' : 'Bukan pembuat progress') }}" @endunless>
+                                @unless($canUpdate) disabled @endunless
+                                title="{{ $updateDisabledReason }}"> {{-- NEW: reason --}}
                           Update Progress
                         </button>
                       </form>

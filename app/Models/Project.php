@@ -29,7 +29,9 @@ class Project extends Model
         'status_text',
         'status_color',
         'can_decide_completion',
-        // 'desired_average_percent', 'is_finished', 'finished_at_calc' // kalau mau ikut juga
+        // Tambahan: expose indikator siap finalisasi karena overdue (boleh dipakai di Blade kalau perlu)
+        'ready_because_overdue', // NEW
+        // 'desired_average_percent', 'is_finished', 'finished_at_calc'
     ];
 
     /* ================== RELATIONSHIPS ================== */
@@ -39,8 +41,6 @@ class Project extends Model
         return $this->hasMany(Progress::class);
     }
 
-    // Jika Anda memang punya tabel progress_updates langsung di level project, biarkan;
-    // kalau tidak perlu, hapus method ini.
     public function updates(): HasMany
     {
         return $this->hasMany(ProgressUpdate::class);
@@ -63,20 +63,15 @@ class Project extends Model
 
     /* ================== COMPUTED / HELPERS ================== */
 
-    // Rata-rata target awal dari semua progress (dibulatkan)
     public function getDesiredAveragePercentAttribute(): int
     {
-        // gunakan collection saat relasi sudah diload (menghindari query ulang)
         if ($this->relationLoaded('progresses')) {
             $avg = (float) ($this->progresses->avg('desired_percent') ?? 0);
             return (int) round($avg);
         }
-
-        // fallback ke query bila belum diload
         return (int) round($this->progresses()->avg('desired_percent') ?? 0);
     }
 
-    // Apakah seluruh progress sudah mencapai target & terkonfirmasi
     public function getIsFinishedAttribute(): bool
     {
         if (!$this->relationLoaded('progresses')) {
@@ -88,7 +83,6 @@ class Project extends Model
         }
 
         foreach ($this->progresses as $pr) {
-            // updates sudah diurut desc; ambil terbaru
             $latest = $pr->updates->first();
             $real   = (int) ($latest->progress_percent ?? $latest->percent ?? 0);
 
@@ -100,7 +94,6 @@ class Project extends Model
         return true;
     }
 
-    // Tanggal selesai dihitung dari konfirmasi terakhir progress
     public function getFinishedAtCalcAttribute()
     {
         if (!$this->relationLoaded('progresses')) {
@@ -114,13 +107,10 @@ class Project extends Model
     /** ====== STATUS UNTUK UI (DIG & IT) ====== */
     public function getStatusTextAttribute(): string
     {
-        // Jika belum pernah diputuskan (completed_at null atau meets_requirement null)
         if (!$this->completed_at || is_null($this->meets_requirement)) {
-            // fallback: kalau sebenarnya semua progress selesai namun belum difinalisasi
             return $this->is_finished ? 'Project Selesai' : 'Dalam Proses';
         }
 
-        // Sudah diputuskan
         return $this->meets_requirement
             ? 'Project Selesai, Memenuhi'
             : 'Project Selesai, Tidak Memenuhi';
@@ -128,18 +118,69 @@ class Project extends Model
 
     public function getStatusColorAttribute(): string
     {
-        // Belum final: merah tema
         if (!$this->completed_at || is_null($this->meets_requirement)) {
             return '#7A1C1C';
         }
-
-        // Sudah final: hijau bila memenuhi, merah bila tidak
         return $this->meets_requirement ? '#166534' : '#7A1C1C';
     }
 
     /**
+     * Skenario tambahan untuk finalisasi:
+     * - ADA minimal 1 progress yang SUDAH LEWAT timeline SELESAI,
+     *   BELUM dikonfirmasi, dan realisasi < target (unmet-overdue)
+     * - Progress lainnya SUDAH dikonfirmasi.
+     */
+    public function readyBecauseOverdue(): bool // NEW
+    {
+        if (!$this->relationLoaded('progresses')) {
+            $this->load(['progresses.updates' => fn($q) => $q->orderByDesc('update_date')]);
+        }
+
+        $hasOverdueUnmet = false;
+
+        foreach ($this->progresses as $pr) {
+            $latest = $pr->updates->first();
+            $real   = $latest ? (int)($latest->progress_percent ?? $latest->percent ?? 0) : 0;
+
+            $end   = $pr->end_date ? \Illuminate\Support\Carbon::parse($pr->end_date)->startOfDay() : null;
+            $od    = $end ? $end->lt(now()->startOfDay()) : false;
+            $unmet = $od && is_null($pr->confirmed_at) && ($real < (int)$pr->desired_percent);
+
+            if ($unmet) {
+                $hasOverdueUnmet = true;
+                break;
+            }
+        }
+
+        if (!$hasOverdueUnmet) {
+            return false;
+        }
+
+        // "Lainnya" harus sudah confirmed (yang unmet-overdue dikecualikan)
+        $othersAllConfirmed = $this->progresses->every(function ($pr) {
+            $latest = $pr->updates->first();
+            $real   = $latest ? (int)($latest->progress_percent ?? $latest->percent ?? 0) : 0;
+
+            $end   = $pr->end_date ? \Illuminate\Support\Carbon::parse($pr->end_date)->startOfDay() : null;
+            $od    = $end ? $end->lt(now()->startOfDay()) : false;
+            $unmet = $od && is_null($pr->confirmed_at) && ($real < (int)$pr->desired_percent);
+
+            return $unmet ? true : !is_null($pr->confirmed_at);
+        });
+
+        return $othersAllConfirmed && is_null($this->meets_requirement);
+    }
+
+    // NEW: expose sebagai accessor agar bisa dipakai langsung di Blade: $project->ready_because_overdue
+    public function getReadyBecauseOverdueAttribute(): bool // NEW
+    {
+        return $this->readyBecauseOverdue(); // NEW
+    }
+
+    /**
      * BOLEH ambil keputusan penyelesaian?
-     * - Semua progress sudah dikonfirmasi & meeting target
+     * - Semua progress sudah dikonfirmasi & meeting target, ATAU
+     * - Skenario overdue-unmet (di atas)
      * - DAN project belum diputuskan (meets_requirement === null)
      */
     public function getCanDecideCompletionAttribute(): bool
@@ -158,7 +199,10 @@ class Project extends Model
             return $real >= (int) $pr->desired_percent && !is_null($pr->confirmed_at);
         });
 
-        return $allMetAndConfirmed && is_null($this->meets_requirement);
+        // === NEW: ikutkan skenario overdue
+        $readyBecauseOverdue = $this->readyBecauseOverdue(); // NEW
+
+        return ($allMetAndConfirmed || $readyBecauseOverdue) && is_null($this->meets_requirement);
     }
 
     /* ================== SCOPES OPSIONAL ================== */
