@@ -298,9 +298,21 @@
                     $ownerRoleLabel = $role === 'digital_banking' ? 'DIG' : ($role === 'it' ? 'IT' : '—');
                   @endphp
 
+  @php
+    // NEW: telat timeline + belum capai target + belum dikonfirmasi => Tidak Memenuhi
+    $endDate   = $pr->end_date ? \Illuminate\Support\Carbon::parse($pr->end_date)->startOfDay() : null; // NEW
+    $isOverdue = $endDate ? $endDate->lt(now()->startOfDay()) : false; // NEW
+    $isUnmet   = $isOverdue && !$pr->confirmed_at && ($realisasi < (int)$pr->desired_percent); // NEW
+  @endphp
+
                   <div class="rounded-2xl bg-[#E6CACA] p-4">
                     <div class="flex items-start justify-between mb-2">
-                      <div class="font-semibold">Progress {{ $loop->iteration }} — {{ $pr->name }}</div>
+                      <div class="font-semibold">Progress {{ $loop->iteration }} — {{ $pr->name }}
+                        {{-- NEW: badge Tidak Memenuhi di header progress --}}
+                        @if($isUnmet)
+                          <span class="ml-2 inline-flex items-center rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-[11px] font-semibold">Tidak Memenuhi</span> {{-- NEW --}}
+                        @endif
+                      </div>
 
                       <div class="flex gap-2">
                         {{-- Edit/Hapus hanya milik owner progress --}}
@@ -320,6 +332,13 @@
                         @endif
                       </div>
                     </div>
+
+                    {{-- NEW: alert ringkas bila tidak memenuhi --}}
+                    @if($isUnmet)
+                      <div class="mb-2 text-[12px] rounded-lg border border-red-300 bg-red-50 text-red-700 px-3 py-2">
+                        Melewati timeline selesai, realisasi belum mencapai target & belum dikonfirmasi. {{-- NEW --}}
+                      </div>
+                    @endif
 
                     <div class="mt-2 text-sm">
                       <div class="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1">
@@ -401,6 +420,16 @@
                           </span>
                         @endif
                       </div>
+
+                      {{-- NEW: chip telat timeline di area aksi --}}
+                      @if($isOverdue && !$alreadyConfirmed)
+                        <div class="mt-2">
+                          <span class="inline-flex items-center rounded-full bg-red-100 text-red-700 px-3 py-1 text-xs font-semibold">
+                            Telat dari timeline
+                          </span>
+                        </div>
+                      @endif
+                      {{-- NEW END --}}
                     </div>
 
                     @unless($isOwner)

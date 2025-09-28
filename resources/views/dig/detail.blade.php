@@ -68,7 +68,9 @@
 
     {{-- BARIS JUDUL/AKSI (judul ikut status berjalan) --}}
     <div class="flex items-center justify-between">
-      <h1 class="text-[15px] md:text-[16px] font-semibold text-[#7A1C1C]">{{ $statusText }}</h1>
+      <h1 class="text-[15px] md:text-[16px] font-semibold" style="color: {{ $statusColor }};">
+  {{ $statusText }}
+</h1>
       <a href="{{ route('dig.dashboard') }}"
          class="px-3 py-2 rounded-lg border border-[#7A1C1C] text-[#7A1C1C] bg-white hover:bg-[#FFF2F2] text-[12px] font-medium">
         Kembali

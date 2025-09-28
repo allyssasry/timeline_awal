@@ -41,76 +41,100 @@
     
   </header>
 
-  <main class="max-w-6xl mx-auto px-5 py-6">
+   <main class="max-w-6xl mx-auto px-5 py-6">
+    @php
+      use App\Notifications\SupervisorNotification as SN;
+
+      // Fallback unreadCount jika belum dikirim dari controller
+      $unreadCount = $unreadCount
+        ?? auth()->user()?->unreadNotifications()?->count()
+        ?? 0;
+
+      // Ambil notifikasi terbaru langsung dari user (mis. 50 terakhir)
+      $all = auth()->user()
+            ?->notifications()
+            ->latest()
+            ->take(50)
+            ->get() ?? collect();
+
+      // Tampilkan HANYA 3 tipe yang diminta
+      $items = $all->filter(function($n){
+        $t = data_get($n->data,'type');
+        return in_array($t, [
+          SN::PROJECT_CREATED_BY_DIG,
+          SN::PROJECT_DONE,
+          SN::PROJECT_UNMET,
+        ], true);
+      });
+    @endphp
+
     <div class="flex items-center justify-between">
-  <h1 class="text-lg font-semibold">Notifikasi</h1>
-  <div class="flex items-center gap-3">
-    @if(($unreadCount ?? 0) > 0)
-      <span class="inline-flex items-center justify-center min-w-[1.5rem] h-6 rounded-full bg-[#7A1C1C] text-white text-xs px-2">
-        {{ $unreadCount }}
-      </span>
-      <form method="POST" action="{{ route('supervisor.notifications.readAll') }}">
-        @csrf
-        <button class="text-xs rounded-lg border px-3 py-1 bg-white hover:bg-red-50 border-red-200 text-[#7A1C1C]">
-          Tandai semua terbaca
-        </button>
-      </form>
-    @endif
-  </div>
-</div>
+      <h1 class="text-lg font-semibold">Notifikasi</h1>
+      <div class="flex items-center gap-3">
+        @if(($unreadCount ?? 0) > 0)
+          <span class="inline-flex items-center justify-center min-w-[1.5rem] h-6 rounded-full bg-[#7A1C1C] text-white text-xs px-2">
+            {{ $unreadCount }}
+          </span>
+          <form method="POST" action="{{ route('supervisor.notifications.readAll') }}">
+            @csrf
+            <button class="text-xs rounded-lg border px-3 py-1 bg-white hover:bg-red-50 border-red-200 text-[#7A1C1C]">
+              Tandai semua terbaca
+            </button>
+          </form>
+        @endif
+      </div>
+    </div>
 
     <div class="relative my-4">
       <hr class="border-[#D7B9B9]">
-      <div class="absolute left-1/2 -translate-x-1/2 -top-3 bg-[#F8ECEC] px-3 text-sm text-gray-600">Hari Ini</div>
-    </div>
-
-    {{-- HARI INI --}}
-  @php
-  use App\Notifications\SupervisorNotification as SN;
-
-  $items = ($today ?? collect())->filter(function($n){
-    return in_array(data_get($n->data,'type'), [
-      SN::PROJECT_CREATED_BY_DIG, SN::PROJECT_DONE, SN::PROJECT_UNMET
-    ], true);
-  });
-@endphp
-
-<div class="space-y-3">
-  @forelse($items as $n)
-    @php
-      $t    = data_get($n->data,'type');
-      $name = data_get($n->data,'project_name','—');
-      $ts   = $n->created_at?->timezone('Asia/Jakarta')->format('d M Y, H.i');
-
-      [$title, $desc, $rightCls] = match($t){
-        SN::PROJECT_CREATED_BY_DIG => ['Project Baru Dibuat oleh DIG', 'DIG membuat project baru.', 'text-[#7A1C1C]'],
-        SN::PROJECT_DONE           => ['Project Telah Selesai',        'Seluruh progress terkonfirmasi & mencapai target.', 'text-[#C05454]'],
-        SN::PROJECT_UNMET          => ['Project Tidak Memenuhi',       'Ada progress belum terkonfirmasi atau di bawah target.', 'text-[#7A1C1C]'],
-        default                    => ['Status','', 'text-[#7A1C1C]'],
-      };
-    @endphp
-
-    <div class="rounded-xl bg-[#F2DCDC] px-5 py-4 border border-[#E7C9C9]">
-      <div class="flex items-center justify-between">
-        <div class="text-[13px]">
-          <div class="text-gray-700">Tanggal : {{ $ts }}</div>
-          <div class="mt-1">Project : <span class="font-semibold">{{ $name }}</span></div>
-        </div>
-        <div class="text-[13px] font-semibold {{ $rightCls }}">{{ $title }}</div>
+      <div class="absolute left-1/2 -translate-x-1/2 -top-3 bg-[#F8ECEC] px-3 text-sm text-gray-600">
+        Terbaru
       </div>
-      <div class="mt-2 text-sm text-gray-800">{{ $desc }}</div>
     </div>
-  @empty
-    <div class="text-sm text-gray-600">Belum ada notifikasi hari ini.</div>
-  @endforelse
-</div>
 
+    <div class="space-y-3">
+      @forelse($items as $n)
+        @php
+          $type = data_get($n->data,'type');
+          $name = data_get($n->data,'project_name','—');
+          $ts   = $n->created_at?->timezone('Asia/Jakarta')->format('d M Y, H.i');
 
-    {{-- (Opsional) daftar semua notifikasi dengan pagination --}}
-    {{-- @if(isset($notifications)) --}}
-    {{--   <div class="mt-6">{{ $notifications->links() }}</div> --}}
-    {{-- @endif --}}
+          // Mapping judul & deskripsi sesuai permintaan
+          if ($type === SN::PROJECT_CREATED_BY_DIG) {
+            $title   = 'DIG membuat project';
+            $desc    = 'DIG membuat project baru.';
+            $rightCls= 'text-[#7A1C1C]';
+          } elseif ($type === SN::PROJECT_DONE) {
+            $title   = 'DIG mengonfirmasi';
+            $desc    = 'Project selesai, Memenuhi.';
+            $rightCls= 'text-[#166534]'; // hijau
+          } elseif ($type === SN::PROJECT_UNMET) {
+            $title   = 'DIG mengonfirmasi';
+            $desc    = 'Project selesai, Tidak Memenuhi.';
+            $rightCls= 'text-[#7A1C1C]'; // merah
+          } else {
+            $title   = 'Notifikasi';
+            $desc    = '';
+            $rightCls= 'text-[#7A1C1C]';
+          }
+        @endphp
+
+        <div class="rounded-xl bg-[#F2DCDC] px-5 py-4 border border-[#E7C9C9]">
+          <div class="flex items-center justify-between">
+            <div class="text-[13px]">
+              <div class="text-gray-700">Tanggal : {{ $ts }}</div>
+              <div class="mt-1">Project : <span class="font-semibold">{{ $name }}</span></div>
+            </div>
+            <div class="text-[13px] font-semibold {{ $rightCls }}">{{ $title }}</div>
+          </div>
+          <div class="mt-2 text-sm text-gray-800">{{ $desc }}</div>
+        </div>
+      @empty
+        <div class="text-sm text-gray-600">Belum ada notifikasi.</div>
+      @endforelse
+    </div>
   </main>
+
     <script>
     // Dropdown menu
     (function(){

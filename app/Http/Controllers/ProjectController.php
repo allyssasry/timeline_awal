@@ -239,6 +239,17 @@ class ProjectController extends Controller
             return back()->with('info', 'Project sudah difinalisasi sebelumnya.'); // NEW
         } // NEW
 
+        // NEW (opsional tapi direkomendasikan): pastikan semua progress sudah konfirmasi & capai target
+        $project->load(['progresses.updates' => fn($u) => $u->orderByDesc('update_date')]); // NEW
+        $allMetAndConfirmed = $project->progresses->every(function ($pr) { // NEW
+            $latest = $pr->updates->first();
+            $real   = $latest ? (int)($latest->percent ?? $latest->progress_percent ?? 0) : 0;
+            return $real >= (int)$pr->desired_percent && !is_null($pr->confirmed_at);
+        }); // NEW
+        if (!$allMetAndConfirmed) { // NEW
+            return back()->with('error', 'Belum semua progress mencapai target & dikonfirmasi.'); // NEW
+        } // NEW
+
         // Simpan status final
         $project->completed_at      = $project->completed_at ?? now();
         $project->meets_requirement = (bool) ((int) $data['meets']);
@@ -254,6 +265,24 @@ class ProjectController extends Controller
                 byName:      auth()->user()?->name
             ));
         }
+
+        // === NEW: Notifikasi ke semua Supervisor agar muncul di halaman notifikasi supervisor ===
+        $notifType = $project->meets_requirement
+            ? SupervisorNotification::PROJECT_DONE
+            : SupervisorNotification::PROJECT_UNMET; // NEW
+
+        $supPayload = [ // NEW
+            'type'         => $notifType,
+            'project_id'   => $project->id,
+            'project_name' => $project->name,
+            'message'      => $project->meets_requirement
+                                ? 'DIG memutuskan: Memenuhi.'
+                                : 'DIG memutuskan: Tidak Memenuhi.',
+            'when'         => now()->toISOString(),
+        ];
+
+        User::where('role','supervisor')->get() // NEW
+            ->each(fn ($sup) => $sup->notify(new SupervisorNotification($supPayload))); // NEW
 
         return back()->with('success', 'Status penyelesaian project diperbarui.');
     }
