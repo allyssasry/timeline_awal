@@ -25,26 +25,20 @@
   <div class="max-w-6xl mx-auto px-5 py-6">
     {{-- ====== STATUS PROJECT + LOGIKA FINALISASI ====== --}}
     @php
-      // 1) Cek apakah semua progress sudah capai target dan dikonfirmasi
+      // 1) Cek apakah semua progress sudah capai target DAN dikonfirmasi
       $allMetAndConfirmed = $project->progresses->every(function ($pr) {
           $last = $pr->updates->sortByDesc('update_date')->first();
           $real = $last ? (int)($last->percent ?? $last->progress_percent ?? 0) : 0;
           return $real >= (int)$pr->desired_percent && !is_null($pr->confirmed_at);
       });
 
-      // 2) Default status (sebelum finalisasi)
+      // 2) Default status project: SELALU "Dalam Proses" sampai DIG finalisasi
       $statusText  = 'Dalam Proses';
       $statusColor = '#7A1C1C';
       $statusBg    = '#FEF2F2';
 
-      // 3) “Siap difinalisasi” bila semua progress sudah memenuhi & belum ada keputusan
-      if ($allMetAndConfirmed && is_null($project->meets_requirement) && is_null($project->completed_at)) {
-          $statusText  = 'Siap difinalisasi';
-          $statusColor = '#92400E'; // amber
-          $statusBg    = '#FFFBEB';
-      }
 
-      // 4) Jika sudah ada keputusan final (completed_at terisi)
+      // 3) HANYA saat sudah difinalisasi oleh DIG, ubah status akhir
       if (!is_null($project->completed_at)) {
           if ($project->meets_requirement === true) {
               $statusText  = 'Project Selesai, Memenuhi';
@@ -55,22 +49,21 @@
               $statusColor = '#7A1C1C';
               $statusBg    = '#FEE2E2';
           } else {
-              // completed_at terisi namun keputusan null (kasus jarang)
               $statusText  = 'Project Selesai';
               $statusColor = '#334155';
               $statusBg    = '#F1F5F9';
           }
       }
 
-      // 5) Tombol finalisasi muncul hanya jika semua progress selesai & belum ada keputusan
+      // 4) Tombol finalisasi (Memenuhi/Tidak Memenuhi) boleh muncul jika semua progress selesai & belum ada keputusan
       $canDecideCompletion = $allMetAndConfirmed && is_null($project->meets_requirement);
     @endphp
 
-    {{-- BARIS JUDUL/AKSI (judul ikut status berjalan) --}}
+    {{-- BARIS JUDUL/AKSI --}}
     <div class="flex items-center justify-between">
       <h1 class="text-[15px] md:text-[16px] font-semibold" style="color: {{ $statusColor }};">
-  {{ $statusText }}
-</h1>
+        {{ $statusText }}
+      </h1>
       <a href="{{ route('dig.dashboard') }}"
          class="px-3 py-2 rounded-lg border border-[#7A1C1C] text-[#7A1C1C] bg-white hover:bg-[#FFF2F2] text-[12px] font-medium">
         Kembali
@@ -201,15 +194,28 @@
           $isOwner         = (int)($pr->created_by ?? 0) === (int)auth()->id();
           $creator         = $pr->creator ?? null;
           $ownerRoleLabel  = optional($creator)->role === 'digital_banking' ? 'DIG' : (optional($creator)->role === 'it' ? 'IT' : '—');
+
+          // === Tambahan: Flag "Tidak Memenuhi" per progress bila telat dan belum capai target dan belum dikonfirmasi
+          $endDate   = $pr->end_date ? \Illuminate\Support\Carbon::parse($pr->end_date)->startOfDay() : null;
+          $isOverdue = $endDate ? $endDate->lt(now()->startOfDay()) : false;
+          $isUnmet   = $isOverdue && is_null($pr->confirmed_at) && ($realisasi < (int)$pr->desired_percent);
         @endphp
 
         <section class="rounded-[16px] bg-[#E3BDBD]/60 border border-[#C99E9E] px-5 py-4">
           {{-- HEAD ROW --}}
           <div class="flex items-center justify-between mb-3">
             <div class="text-[14px] font-semibold text-[#2d2d2d]">
-              Progress {{ $i+1 }} — <span class="{{ $pr->confirmed_at ? 'text-green-700' : 'text-[#7A1C1C]' }}">
-                {{ $pr->confirmed_at ? 'Selesai' : 'Dalam Proses' }}
-              </span>
+              Progress {{ $i+1 }} —
+              @if($pr->confirmed_at)
+                <span class="text-green-700">Selesai</span>
+              @else
+                <span class="text-[#7A1C1C]">Dalam Proses</span>
+                @if($isUnmet)
+                  <span class="ml-2 inline-flex items-center rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-[11px] font-semibold">
+                    Tidak Memenuhi
+                  </span>
+                @endif
+              @endif
             </div>
 
             <div class="flex items-center gap-2">
@@ -258,6 +264,11 @@
               <div>
                 <span class="inline-block w-40 text-gray-700">Timeline Selesai</span> :
                 {{ $pr->end_date ? \Illuminate\Support\Carbon::parse($pr->end_date)->timezone('Asia/Jakarta')->format('d M Y') : '-' }}
+                @if($isOverdue && is_null($pr->confirmed_at))
+                  <span class="ml-2 inline-flex items-center rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-[11px] font-semibold">
+                    Telat timeline
+                  </span>
+                @endif
               </div>
 
               <div><span class="inline-block w-40 text-gray-700">Target Progress</span> : {{ $pr->desired_percent }}%</div>

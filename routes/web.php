@@ -20,6 +20,7 @@ use App\Http\Controllers\SupervisorDashboardController;
 use App\Http\Controllers\SupervisorController;
 use App\Http\Controllers\SupervisorNotificationController;
 use App\Http\Controllers\ArsipController;
+use App\Http\Controllers\AccountController;
 
 Route::prefix('supervisor')
     ->name('supervisor.')
@@ -307,4 +308,14 @@ Route::get('/arsip', [\App\Http\Controllers\ArsipController::class, 'index'])
 Route::middleware(['auth'])->group(function () {
     Route::patch('/projects/{project}/completion', [ProjectController::class, 'setCompletion'])
         ->name('projects.setCompletion');
+});
+
+Route::middleware(['auth'])->group(function () {
+    // Halaman Pengaturan Akun
+    Route::get('/account/settings', [AccountController::class, 'edit'])
+        ->name('account.setting');
+
+    // Simpan perubahan
+    Route::put('/account/settings', [AccountController::class, 'update'])
+        ->name('account.update');
 });

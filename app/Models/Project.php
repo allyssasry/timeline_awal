@@ -24,14 +24,11 @@ class Project extends Model
         'meets_requirement' => 'boolean',
     ];
 
-    // Opsional: supaya status & flag helper ikut muncul saat ->toArray() / JSON
     protected $appends = [
         'status_text',
         'status_color',
         'can_decide_completion',
-        // Tambahan: expose indikator siap finalisasi karena overdue (boleh dipakai di Blade kalau perlu)
         'ready_because_overdue', // NEW
-        // 'desired_average_percent', 'is_finished', 'finished_at_calc'
     ];
 
     /* ================== RELATIONSHIPS ================== */
@@ -156,7 +153,6 @@ class Project extends Model
             return false;
         }
 
-        // "Lainnya" harus sudah confirmed (yang unmet-overdue dikecualikan)
         $othersAllConfirmed = $this->progresses->every(function ($pr) {
             $latest = $pr->updates->first();
             $real   = $latest ? (int)($latest->progress_percent ?? $latest->percent ?? 0) : 0;
@@ -171,7 +167,6 @@ class Project extends Model
         return $othersAllConfirmed && is_null($this->meets_requirement);
     }
 
-    // NEW: expose sebagai accessor agar bisa dipakai langsung di Blade: $project->ready_because_overdue
     public function getReadyBecauseOverdueAttribute(): bool // NEW
     {
         return $this->readyBecauseOverdue(); // NEW
@@ -179,9 +174,6 @@ class Project extends Model
 
     /**
      * BOLEH ambil keputusan penyelesaian?
-     * - Semua progress sudah dikonfirmasi & meeting target, ATAU
-     * - Skenario overdue-unmet (di atas)
-     * - DAN project belum diputuskan (meets_requirement === null)
      */
     public function getCanDecideCompletionAttribute(): bool
     {
@@ -199,7 +191,6 @@ class Project extends Model
             return $real >= (int) $pr->desired_percent && !is_null($pr->confirmed_at);
         });
 
-        // === NEW: ikutkan skenario overdue
         $readyBecauseOverdue = $this->readyBecauseOverdue(); // NEW
 
         return ($allMetAndConfirmed || $readyBecauseOverdue) && is_null($this->meets_requirement);
@@ -225,5 +216,46 @@ class Project extends Model
     public function scopeNotMeets($q)
     {
         return $q->where('meets_requirement', false);
+    }
+
+    /** ================== SCOPES TAMBAHAN (BARU) ================== */
+
+    /**
+     * Proyek sudah DIFINALISASI (memenuhi/tidak memenuhi).
+     */
+    public function scopeFinalized($q)
+    {
+        return $q->where(function ($x) {
+            $x->whereNotNull('completed_at')
+              ->orWhereNotNull('meets_requirement');
+        });
+    }
+
+    /**
+     * Semua progress SUDAH dikonfirmasi (dan minimal ada 1 progress).
+     */
+    public function scopeAllProgressConfirmed($q)
+    {
+        return $q->whereHas('progresses')
+                 ->whereDoesntHave('progresses', function ($qq) {
+                     $qq->whereNull('confirmed_at');
+                 });
+    }
+
+    /**
+     * Ada progress yang BELUM dikonfirmasi atau belum punya progress sama sekali.
+     */
+    public function scopeHasUnconfirmedOrNoProgress($q)
+    {
+        return $q->doesntHave('progresses')
+                 ->orWhereHas('progresses', function ($qq) {
+                     $qq->whereNull('confirmed_at');
+                 });
+    }
+
+    /** (opsional) akses cepat sebagai properti: $project->is_finalized */
+    public function getIsFinalizedAttribute(): bool
+    {
+        return !is_null($this->completed_at) || !is_null($this->meets_requirement);
     }
 }

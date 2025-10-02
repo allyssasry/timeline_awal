@@ -9,15 +9,56 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
-use Illuminate\Support\Str; // <-- ditambahkan
 
-// Notifikasi
-use App\Notifications\ProgressConfirmed;            // notif ke DIG saat IT konfirmasi
-use App\Notifications\SupervisorStatusNotification; // notif ke Supervisor (it_done, dig_done, project_done)
+use App\Notifications\ProgressConfirmed;
+use App\Notifications\SupervisorStatusNotification;
 
 class ProgressController extends Controller
 {
     use AuthorizesRequests;
+
+    /**
+     * GET /progresses (route name: semua.progresses)
+     * Tampilkan daftar project dengan filter tab: all|in_progress|done
+     */
+    public function index(Request $request)
+    {
+        $status = strtolower($request->get('status', 'all'));
+
+        // Eager-load supaya blade cepat
+        $base = Project::query()
+            ->with([
+                'progresses' => function ($q) {
+                    $q->with([
+                        'creator',
+                        'updates' => fn($u) => $u->orderByDesc('update_date'),
+                    ]);
+                },
+                'digitalBanking',
+                'developer',
+            ]);
+
+        // Filter:
+        if ($status === 'done') {
+            // Selesai = sudah final + semua progress terkonfirmasi
+            $base->finalized()->allProgressConfirmed();
+        } elseif ($status === 'in_progress') {
+            // Dalam Proses = selain “done”
+            // (belum final) ATAU (sudah final tapi masih ada progress belum dikonfirmasi / belum ada progress)
+            $base->where(function ($q) {
+                $q->where(function ($qq) {
+                    $qq->whereNull('completed_at')
+                       ->whereNull('meets_requirement');
+                })->orWhere(function ($qq) {
+                    $qq->finalized()->hasUnconfirmedOrNoProgress();
+                });
+            });
+        } // status=all => tanpa filter tambahan
+
+        $projects = $base->latest('id')->get();
+
+        return view('dig.progresses', compact('projects'));
+    }
 
     /**
      * POST /projects/{project}/progresses
@@ -102,8 +143,7 @@ class ProgressController extends Controller
 
     /**
      * POST /progresses/{progress}/notes
-     * Simpan catatan. (Biasanya boleh untuk DIG & IT)
-     * route name: progresses.notes.store
+     * Simpan catatan.
      */
     public function notesStore(Request $request, Progress $progress)
     {
@@ -111,12 +151,11 @@ class ProgressController extends Controller
             'body' => ['required','string','max:2000'],
         ]);
 
-        // GUNAKAN kolom yang ada pada tabel notes mu:
-        // Jika kolomnya 'content', pakai 'content'. Jika 'body', ganti jadi 'body'.
         $progress->notes()->create([
-            'content' => $data['body'],              // <- ganti ke 'body' jika kolomnya 'body'
+            // sesuaikan kolom notes: 'content' atau 'body'
+            'content' => $data['body'],
             'user_id' => Auth::id(),
-            'role'    => Auth::user()->role ?? null, // 'digital_banking' | 'it'
+            'role'    => Auth::user()->role ?? null,
         ]);
 
         return back()->with('success', 'Catatan ditambahkan.');
@@ -134,7 +173,6 @@ class ProgressController extends Controller
             return back()->with('success', 'Progress sudah dikonfirmasi sebelumnya.');
         }
 
-        // Ambil realisasi terbaru
         $latestUpdate = $progress->updates()->orderByDesc('update_date')->first();
         $latest = (int) (
             optional($latestUpdate)->percent
@@ -148,7 +186,7 @@ class ProgressController extends Controller
 
         $progress->forceFill(['confirmed_at' => now()])->save();
 
-        // ===== Notifikasi ke DIG jika IT yang konfirmasi (punyamu) =====
+        // ===== Notifikasi ke DIG jika IT yang konfirmasi =====
         $confirmer = Auth::user();
         $project   = $progress->project()->with(['digitalBanking','developer'])->first();
 
@@ -160,12 +198,12 @@ class ProgressController extends Controller
             $project->digitalBanking->notify(new ProgressConfirmed($progress, $confirmer));
         }
 
-        // ===== Re-load project + seluruh progress beserta latest update =====
+        // ===== Re-load project + seluruh progress =====
         $project = $progress->project()->with([
             'progresses' => function ($q) {
                 $q->with([
                     'creator',
-                    'updates' => fn($u) => $u->orderByDesc('update_date')
+                    'updates' => fn($u) => $u->orderByDesc('update_date'),
                 ]);
             },
             'digitalBanking',
@@ -179,7 +217,9 @@ class ProgressController extends Controller
             return $pr->confirmed_at && $real >= (int) $pr->desired_percent;
         });
 
-        if ($allDone && is_null($project->finished_at)) {
+        // Jika kamu menyimpan timestamp selesai internal (opsional)
+        if ($allDone && is_null($project->finished_at ?? null)) {
+            // pastikan kolom finished_at ada jika ingin memakai ini
             $project->forceFill(['finished_at' => now()])->save();
         }
 

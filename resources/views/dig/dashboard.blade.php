@@ -43,8 +43,10 @@
           </svg>
         </button>
         <div id="menuPanel" class="hidden absolute right-0 mt-2 w-48 rounded-xl shadow-lg bg-[#7A1C1C] text-white overflow-hidden">
-          <a href="#" class="block px-4 py-3 hover:bg-[#6a1717]">Pengaturan Akun</a>
-          <a href="/logout" class="block px-4 py-3 hover:bg-[#6a1717]">Log Out</a>
+ <a href="{{ route('account.setting') }}" class="block px-4 py-3 hover:bg-[#6a1717]">
+                        Pengaturan Akun
+                    </a>         
+                     <a href="/logout" class="block px-4 py-3 hover:bg-[#6a1717]">Log Out</a>
         </div>
       </div>
     </div>

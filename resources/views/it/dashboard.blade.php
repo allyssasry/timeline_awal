@@ -24,7 +24,7 @@
       </div>
 
       <nav class="hidden md:flex items-center gap-6 text-sm">
-        <a href="#beranda" class="text-gray-600 hover:text-red-600">Beranda</a>
+        <a href="#beranda" class="font-semibold">Beranda</a>
         <a href="{{ route('semua.progresses') }}" class="text-gray-600 hover:text-red-600">Progress</a>
         <a href="{{ route('it.notifications') }}" class="text-gray-600 hover:text-red-600">Notifikasi</a>
         <a href="{{ route('semua.arsip') }}" class="text-gray-600 hover:text-red-600">Arsip</a>
@@ -38,7 +38,9 @@
           </svg>
         </button>
         <div id="menuPanel" class="hidden absolute right-0 mt-2 w-48 rounded-xl shadow-lg bg-[#7A1C1C] text-white overflow-hidden">
-          <a href="#" class="block px-4 py-3 hover:bg-[#6a1717]">Pengaturan Akun</a>
+          <a href="{{ route('account.setting') }}" class="block px-4 py-3 hover:bg-[#6a1717]">
+            Pengaturan Akun
+          </a>
           <a href="/logout" class="block px-4 py-3 hover:bg-[#6a1717]">Log Out</a>
         </div>
       </div>
@@ -78,9 +80,27 @@
 
           $size=110; $stroke=12; $r=$size/2-$stroke; $circ=2*M_PI*$r; $off=$circ*(1-$realization/100);
 
-          // status dari accessor model
-          $statusText  = $project->status_text;
-          $statusColor = $project->status_color;
+          // --- STATUS: "Menunggu Finalisasi" bila semua progress sudah met+confirmed namun project belum difinalisasi ---
+          $finalized = !is_null($project->meets_requirement) || !is_null($project->completed_at);
+
+          $progressCount = $project->progresses->count();
+          $allConfirmedAndMet = $progressCount > 0 && $project->progresses->every(function($p) {
+            $last = $p->updates->sortByDesc('update_date')->first();
+            $real = $last ? (int)($last->percent ?? ($last->progress_percent ?? 0)) : 0;
+            return !is_null($p->confirmed_at) && $real >= (int)$p->desired_percent;
+          });
+
+          if ($finalized) {
+            $statusText  = $project->meets_requirement ? 'Project Selesai, Memenuhi' : 'Project Selesai, Tidak Memenuhi';
+            $statusColor = $project->meets_requirement ? '#166534' : '#7A1C1C';
+          } elseif ($allConfirmedAndMet) {
+            // semua progress sudah memenuhi & dikonfirmasi, tinggal keputusan akhir
+            $statusText  = 'Menunggu Finalisasi';
+            $statusColor = '#7A1C1C';
+          } else {
+            $statusText  = 'Dalam Proses';
+            $statusColor = '#7A1C1C';
+          }
 
           // untuk hak edit progress: owner progress (IT) boleh edit/update sebelum dikonfirmasi
           $authId = (int) auth()->id();
@@ -123,7 +143,7 @@
             {{-- BADGE STATUS --}}
             <div class="flex items-start justify-end">
               <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
-                    style="color: {{ $statusColor }}; background-color: {{ $project->completed_at ? '#DCFCE7' : '#FEE2E2' }};">
+                    style="color: {{ $statusColor }}; background-color: {{ $finalized ? '#DCFCE7' : '#FEE2E2' }};">
                 {{ $statusText }}
               </span>
             </div>
@@ -140,7 +160,6 @@
                   $isOwner          = (int)($pr->created_by ?? 0) === $authId;
                   $alreadyConfirmed = !is_null($pr->confirmed_at);
                   $canUpdate        = $isOwner && !$alreadyConfirmed;
-                  $canConfirm       = false; // IT tidak melakukan finalisasi project di dashboard ini
                 @endphp
 
                 <div class="rounded-2xl bg-[#E6CACA] p-4">

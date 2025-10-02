@@ -19,26 +19,25 @@
   $user = auth()->user();
   $role = $user?->role; // 'digital_banking' | 'it' | 'supervisor'
 
-  // Label yang rapi per role
+  // Label per role
   $roleLabel = match ($role) {
-      'it'            => 'Developer',
-      'digital_banking'=> 'DIG',
-      'supervisor'    => 'Supervisor',
-      default         => 'User',
+      'it'              => 'Developer',
+      'digital_banking' => 'DIG',
+      'supervisor'      => 'Supervisor',
+      default           => 'User',
   };
 
-  // Tentukan rute "Beranda" sesuai role, dengan fallback aman
+  // Rute beranda per role
   if ($role === 'it' && \Illuminate\Support\Facades\Route::has('it.dashboard')) {
       $homeUrl = route('it.dashboard');
   } elseif ($role === 'supervisor' && \Illuminate\Support\Facades\Route::has('supervisor.dashboard')) {
       $homeUrl = route('supervisor.dashboard');
   } else {
-      // default ke dashboard DIG bila ada, kalau tidak ya ke root
       $homeUrl = \Illuminate\Support\Facades\Route::has('dig.dashboard')
           ? route('dig.dashboard') : url('/');
   }
 
-  // Progress: untuk supervisor arahkan ke dashboard supervisor jika ada
+  // Rute progress per role
   if ($role === 'it' && \Illuminate\Support\Facades\Route::has('it.progresses')) {
       $progressUrl = route('it.progresses');
   } elseif ($role === 'supervisor' && \Illuminate\Support\Facades\Route::has('supervisor.dashboard')) {
@@ -49,7 +48,7 @@
           : ($homeUrl ?? url('/'));
   }
 
-  // Notifikasi: masing-masing role kalau ada, kalau tidak fallback ke DIG
+  // Rute notifikasi per role
   if ($role === 'it' && \Illuminate\Support\Facades\Route::has('it.notifications')) {
       $notifUrl = route('it.notifications');
   } elseif ($role === 'supervisor' && \Illuminate\Support\Facades\Route::has('supervisor.notifications')) {
@@ -59,14 +58,14 @@
           ? route('dig.notifications') : url()->current();
   }
 
-  // Arsip – pakai 'semua.arsip' bila ada, kalau tidak 'arsip.arsip', jika tidak ada ya current
+  // Rute arsip
   $arsipUrl = \Illuminate\Support\Facades\Route::has('semua.arsip')
       ? route('semua.arsip')
       : (\Illuminate\Support\Facades\Route::has('arsip.arsip') ? route('arsip.arsip') : url()->current());
 
-  // Helper: menandai link aktif
+  // Helper: link aktif
   $isActive = function (string $url) {
-      return url()->current() === $url ? 'font-semibold text-red-600' : 'text-gray-600 hover:text-red-600';
+      return url()->current() === $url ? 'font-semibold' : 'text-gray-600 hover:text-red-600';
   };
 @endphp
 
@@ -76,7 +75,8 @@
       <div class="flex items-center gap-2">
         <img src="https://website-api.bankdki.co.id/integrations/storage/page-meta-data/007UlZbO3Oe6PivLltdFiQax6QH5kWDvb0cKPdn4.png" class="h-8" alt="Bank Jakarta" />
       </div>
-  {{-- NAVBAR – semua link selalu terlihat, diarahkan sesuai role --}}
+
+      {{-- NAVBAR – semua link terlihat, diarahkan sesuai role --}}
       <nav class="hidden md:flex items-center gap-6 text-sm">
         <a href="{{ $homeUrl }}" class="{{ $isActive($homeUrl) }}">Beranda</a>
         <a href="{{ $progressUrl }}" class="{{ $isActive($progressUrl) }}">Progress</a>
@@ -85,7 +85,6 @@
         <span class="font-semibold text-red-600">{{ $roleLabel }}</span>
       </nav>
 
-
       <div class="relative">
         <button id="menuBtn" class="p-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -93,7 +92,7 @@
           </svg>
         </button>
         <div id="menuPanel" class="hidden absolute right-0 mt-2 w-48 rounded-xl shadow-lg bg-[#7A1C1C] text-white overflow-hidden">
-          <a href="#" class="block px-4 py-3 hover:bg-[#6a1717]">Pengaturan Akun</a>
+          <a href="{{ route('account.setting') }}" class="block px-4 py-3 hover:bg-[#6a1717]">Pengaturan Akun</a>
           <a href="/logout" class="block px-4 py-3 hover:bg-[#6a1717]">Log Out</a>
         </div>
       </div>
@@ -131,27 +130,112 @@
     {{-- LIST PROJECT --}}
     @forelse ($projects as $project)
       @php
-        // rata2 realisasi dari update terbaru tiap progress (untuk cincin)
+        // ==== FILTER TAB ====
+        // A. Final (sudah diputuskan Memenuhi/Tidak Memenuhi atau completed_at terisi)
+        $finalized = !is_null($project->meets_requirement) || !is_null($project->completed_at);
+
+        // B. Semua progress sudah dikonfirmasi & mencapai target (proyek "selesai secara progress")
+        $progressCount = $project->progresses->count();
+        $allConfirmedAndMet = $progressCount > 0 && $project->progresses->every(function($p) {
+          $last  = $p->updates->sortByDesc('update_date')->first();
+          $real  = $last ? (int)($last->percent ?? $last->progress_percent ?? 0) : 0;
+          return !is_null($p->confirmed_at) && $real >= (int)$p->desired_percent;
+        });
+
+        // Telah Selesai = FINALIZED atau ALL CONFIRMED & MET
+        $done = $finalized || $allConfirmedAndMet;
+
+        // Dalam Proses = selain Done
+        $isInProgress = !$done;
+
+        $tabFilter = request('status','all');
+      @endphp
+
+      @if($tabFilter === 'in_progress' && !$isInProgress)
+        @continue
+      @endif
+      @if($tabFilter === 'done' && !$done)
+        @continue
+      @endif
+      {{-- ==== END FILTER TAB ==== --}}
+
+      @php
+        // Cincin: rata-rata realisasi dari update terbaru tiap progress
         $latestPercents = [];
         foreach ($project->progresses as $pr) {
-          $last = $pr->updates->sortByDesc('update_date')->first();
-          $latestPercents[] = $last ? (int)($last->percent ?? $last->progress_percent ?? 0) : 0;
+          $last = $pr->updates->first() ?: $pr->updates->sortByDesc('update_date')->first();
+          $latestPercents[] = $last ? (int) ($last->progress_percent ?? ($last->percent ?? 0)) : 0;
         }
-        $realization = count($latestPercents) ? (int) round(array_sum($latestPercents)/max(count($latestPercents),1)) : 0;
+        $realization = count($latestPercents)
+            ? (int) round(array_sum($latestPercents) / max(count($latestPercents), 1))
+            : 0;
         $size=88; $stroke=10; $r=$size/2-$stroke; $circ=2*M_PI*$r; $off=$circ*(1-$realization/100);
 
-        $allMetAndConfirmed = $project->progresses->every(function ($p) {
-          $u = $p->updates->sortByDesc('update_date')->first();
-          $real = $u ? (int)($u->percent ?? $u->progress_percent ?? 0) : 0;
-          return $real >= (int)$p->desired_percent && !is_null($p->confirmed_at);
-        });
+        // Badge status:
+        // - Jika final -> "Project Selesai, Memenuhi/Tidak Memenuhi"
+        // - Jika semua progress selesai tapi belum final -> "Menunggu Finalisasi"
+        // - Lainnya -> "Dalam Proses"
+        if ($finalized) {
+          $statusText  = $project->meets_requirement ? 'Project Selesai, Memenuhi' : 'Project Selesai, Tidak Memenuhi';
+          $statusColor = $project->meets_requirement ? '#166534' : '#7A1C1C';
+        } elseif ($allConfirmedAndMet) {
+          $statusText  = 'Menunggu Finalisasi';
+          $statusColor = '#7A1C1C';
+        } else {
+          $statusText  = 'Dalam Proses';
+          $statusColor = '#7A1C1C';
+        }
+
+        // Boleh memutuskan selesai?
+        $canDecideCompletion = $project->can_decide_completion
+          ?? (function() use ($project){
+                $all = $project->progresses->every(function ($p) {
+                  $last = $p->updates->first() ?: $p->updates->sortByDesc('update_date')->first();
+                  $real = $last ? (int) ($last->progress_percent ?? ($last->percent ?? 0)) : 0;
+                  return $real >= (int) $p->desired_percent && !is_null($p->confirmed_at);
+                });
+                return $all && is_null($project->meets_requirement);
+             })();
+
+        // Tambahan aturan: ready because overdue-unmet (selaras dashboard)
+        $hasOverdueUnmet = false;
+        $othersAllConfirmed = true;
+
+        foreach ($project->progresses as $p2) {
+          $last2 = $p2->updates->first() ?: $p2->updates->sortByDesc('update_date')->first();
+          $real2 = $last2 ? (int)($last2->progress_percent ?? ($last2->percent ?? 0)) : 0;
+          $end2  = $p2->end_date ? \Illuminate\Support\Carbon::parse($p2->end_date)->startOfDay() : null;
+          $od2   = $end2 ? $end2->lt(now()->startOfDay()) : false;
+          $unmet2 = $od2 && is_null($p2->confirmed_at) && ($real2 < (int)$p2->desired_percent);
+          if ($unmet2) $hasOverdueUnmet = true;
+        }
+
+        if ($hasOverdueUnmet) {
+          $othersAllConfirmed = $project->progresses->every(function($p3){
+            $last3 = $p3->updates->first() ?: $p3->updates->sortByDesc('update_date')->first();
+            $real3 = $last3 ? (int)($last3->progress_percent ?? ($last3->percent ?? 0)) : 0;
+            $end3  = $p3->end_date ? \Illuminate\Support\Carbon::parse($p3->end_date)->startOfDay() : null;
+            $od3   = $end3 ? $end3->lt(now()->startOfDay()) : false;
+            $unmet3 = $od3 && is_null($p3->confirmed_at) && ($real3 < (int)$p3->desired_percent);
+            return $unmet3 ? true : !is_null($p3->confirmed_at);
+          });
+        }
+
+        $readyBecauseOverdue = $hasOverdueUnmet && $othersAllConfirmed;
+        if (is_null($project->meets_requirement)) {
+          $canDecideCompletion = $canDecideCompletion || $readyBecauseOverdue;
+        }
       @endphp
 
       <section class="mt-6 rounded-2xl border-2 border-[#7A1C1C] bg-[#F2DCDC] p-5">
         {{-- HEADER PROJECT --}}
         <div class="grid md:grid-cols-[auto,1fr,auto] items-start gap-4">
-          <div class="text-xs font-semibold {{ $allMetAndConfirmed ? 'text-green-700' : 'text-[#7A1C1C]' }}">
-            {{ $allMetAndConfirmed ? 'Project Selesai' : 'Dalam Proses' }}
+          {{-- Badge status --}}
+          <div class="text-xs font-semibold">
+            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
+                  style="color: {{ $statusColor }}; background-color: {{ $finalized ? '#DCFCE7' : '#FEE2E2' }};">
+              {{ $statusText }}
+            </span>
           </div>
 
           <div class="flex items-center gap-5">
@@ -187,6 +271,24 @@
 
           {{-- Aksi Project --}}
           <div class="flex items-start gap-2 justify-end">
+            {{-- Memenuhi / Tidak Memenuhi (muncul jika boleh memutuskan) --}}
+            @if($canDecideCompletion)
+              <form method="POST" action="{{ route('projects.setCompletion', $project->id) }}" class="mr-2">
+                @csrf @method('PATCH')
+                <input type="hidden" name="meets" value="1">
+                <button class="px-3 py-1.5 text-xs rounded-full bg-green-700 text-white hover:opacity-90">
+                  Memenuhi
+                </button>
+              </form>
+              <form method="POST" action="{{ route('projects.setCompletion', $project->id) }}" class="mr-2">
+                @csrf @method('PATCH')
+                <input type="hidden" name="meets" value="0">
+                <button class="px-3 py-1.5 text-xs rounded-full bg-[#7A1C1C] text-white hover:opacity-90">
+                  Tidak Memenuhi
+                </button>
+              </form>
+            @endif
+
             <a href="{{ route('projects.edit', $project->id) }}"
                class="p-2 rounded-lg bg-white/60 hover:bg-white border" title="Edit Project">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -211,7 +313,7 @@
             class="btn-toggle-progress inline-flex items-center gap-2 rounded-xl bg-[#7A1C1C] text-white px-3 py-2 text-sm shadow hover:opacity-95"
             data-target="progressForm-{{ $project->id }}">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/>
+              <path d="M11 11V5h2v6h6v2H13v6h-2v-6H5v-2h6z"/>
             </svg>
             Tambah Progress
           </button>
@@ -271,9 +373,30 @@
                 $ownerRoleLabel    = $role === 'digital_banking' ? 'DIG' : ($role === 'it' ? 'IT' : '—');
               @endphp
 
-              <div class="rounded-xl bg-[#E6CACA] p-4">
+              @php
+                // Telat + belum capai target + belum dikonfirmasi => Tidak Memenuhi
+                $endDate   = $pr->end_date ? \Illuminate\Support\Carbon::parse($pr->end_date)->startOfDay() : null;
+                $isOverdue = $endDate ? $endDate->lt(now()->startOfDay()) : false;
+                $isUnmet   = $isOverdue && !$pr->confirmed_at && ($realisasi < (int)$pr->desired_percent);
+
+                // Kunci Update jika sudah lewat timeline
+                $canUpdate = $canUpdate && !$isOverdue;
+
+                // Alasan nonaktif tombol update
+                $updateDisabledReason = $isOverdue
+                  ? 'Tidak bisa update: sudah lewat timeline selesai'
+                  : ($alreadyConfirmed ? 'Sudah dikonfirmasi' : ($isOwner ? 'Hanya DIG yang bisa update' : 'Bukan pembuat progress'));
+              @endphp
+
+              <div class="rounded-2xl bg-[#E6CACA] p-4">
                 <div class="flex items-start justify-between mb-2">
-                  <div class="font-semibold">Progress {{ $loop->iteration }} — {{ $pr->name }}</div>
+                  <div class="font-semibold">
+                    Progress {{ $loop->iteration }} — {{ $pr->name }}
+                    {{-- Badge Tidak Memenuhi (header) --}}
+                    @if($isUnmet)
+                      <span class="ml-2 inline-flex items-center rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-[11px] font-semibold">Tidak Memenuhi</span>
+                    @endif
+                  </div>
 
                   {{-- Edit/Hapus hanya owner --}}
                   @if($isOwner)
@@ -294,26 +417,34 @@
                   @endif
                 </div>
 
-                <div class="mt-2 text-sm">
-                    <div class="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1">
-                      <span>Timeline Mulai</span>
-                      <span>:
-                        {{ $pr->start_date
-                           ? \Illuminate\Support\Carbon::parse($pr->start_date)->timezone('Asia/Jakarta')->format('d M Y')
-                           : '-' }}
-                      </span>
-
-                      <span>Timeline Selesai</span>
-                      <span>:
-                        {{ $pr->end_date
-                           ? \Illuminate\Support\Carbon::parse($pr->end_date)->timezone('Asia/Jakarta')->format('d M Y')
-                           : '-' }}
-                      </span>
-
-                      <span>Target Progress</span>    <span>: {{ (int)$pr->desired_percent }}%</span>
-                      <span>Realisasi Progress</span> <span>: {{ $realisasi }}%</span>
-                    </div>
+                {{-- Alert ringkas bila Tidak Memenuhi --}}
+                @if($isUnmet)
+                  <div class="mb-2 text-[12px] rounded-lg border border-red-300 bg-red-50 text-red-700 px-3 py-2">
+                    Melewati timeline selesai, realisasi belum mencapai target & belum dikonfirmasi.
                   </div>
+                @endif
+
+                <div class="mt-2 text-sm">
+                  <div class="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1">
+                    <span>Timeline Mulai</span>
+                    <span>:
+                      {{ $pr->start_date
+                         ? \Illuminate\Support\Carbon::parse($pr->start_date)->timezone('Asia/Jakarta')->format('d M Y')
+                         : '-' }}
+                    </span>
+
+                    <span>Timeline Selesai</span>
+                    <span>:
+                      {{ $pr->end_date
+                         ? \Illuminate\Support\Carbon::parse($pr->end_date)->timezone('Asia/Jakarta')->format('d M Y')
+                         : '-' }}
+                    </span>
+
+                    <span>Target Progress</span>    <span>: {{ (int)$pr->desired_percent }}%</span>
+                    <span>Realisasi Progress</span> <span>: {{ $realisasi }}%</span>
+                  </div>
+                </div>
+
                 {{-- EDIT INLINE (hidden) --}}
                 <div id="editProgress-{{ $pr->id }}" class="hidden mb-3">
                   <form method="POST" action="{{ route('progresses.update', $pr->id) }}"
@@ -341,7 +472,7 @@
                   </form>
                 </div>
 
-                {{-- UPDATE + KONFIRMASI (Konfirmasi di bawah) --}}
+                {{-- UPDATE + KONFIRMASI --}}
                 <div class="mt-3">
                   {{-- UPDATE --}}
                   <form method="POST" action="{{ route('progresses.updates.store', $pr->id) }}" class="flex flex-wrap gap-3 items-center">
@@ -352,7 +483,8 @@
                       class="rounded-xl border px-3 py-2 text-sm w-28" @unless($canUpdate) disabled @endunless required>
                     <button
                       class="rounded-xl bg-[#7A1C1C] text-white px-4 py-2 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                      @unless($canUpdate) disabled title="{{ $alreadyConfirmed ? 'Sudah dikonfirmasi' : ($isOwner ? 'Hanya DIG yang bisa update' : 'Bukan pembuat progress') }}" @endunless>
+                      @unless($canUpdate) disabled @endunless
+                      title="{{ $canUpdate ? '' : $updateDisabledReason }}">
                       Update Progress
                     </button>
                   </form>
@@ -375,6 +507,15 @@
                       </span>
                     @endif
                   </div>
+
+                  {{-- Chip Telat timeline --}}
+                  @if($isOverdue && !$alreadyConfirmed)
+                    <div class="mt-2">
+                      <span class="inline-flex items-center rounded-full bg-red-100 text-red-700 px-3 py-1 text-xs font-semibold">
+                        Telat dari timeline
+                      </span>
+                    </div>
+                  @endif
                 </div>
 
                 @unless($isOwner)
