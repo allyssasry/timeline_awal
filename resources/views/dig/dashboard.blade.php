@@ -234,45 +234,50 @@
               </div>
 
               {{-- Aksi kanan --}}
-              <div class="flex items-start gap-2 justify-end">
-                {{-- TOMBOL MEMENUHI / TIDAK MEMENUHI (muncul jika boleh memutuskan) --}}
-                @if($canDecideCompletion)
-                  <form method="POST" action="{{ route('projects.setCompletion', $project->id) }}" class="mr-2">
-                    @csrf @method('PATCH')
-                    <input type="hidden" name="meets" value="1">
-                    <button class="px-3 py-1.5 text-xs rounded-full bg-green-700 text-white hover:opacity-90">
-                      Memenuhi
-                    </button>
-                  </form>
-                  <form method="POST" action="{{ route('projects.setCompletion', $project->id) }}" class="mr-2">
-                    @csrf @method('PATCH')
-                    <input type="hidden" name="meets" value="0">
-                    <button class="px-3 py-1.5 text-xs rounded-full bg-[#7A1C1C] text-white hover:opacity-90">
-                      Tidak Memenuhi
-                    </button>
-                  </form>
-                @endif
+         {{-- Aksi kanan --}}
+<div class="flex items-start gap-2 justify-end">
+  {{-- TOMBOL MEMENUHI / TIDAK MEMENUHI (muncul jika boleh memutuskan) --}}
+  @can('finalize-project', $project)
+    @if($canDecideCompletion)
+      <form method="POST" action="{{ route('projects.setCompletion', $project->id) }}" class="mr-2">
+        @csrf @method('PATCH')
+        <input type="hidden" name="meets" value="1">
+        <button class="px-3 py-1.5 text-xs rounded-full bg-green-700 text-white hover:opacity-90">
+          Memenuhi
+        </button>
+      </form>
 
-                {{-- EDIT --}}
-                <a href="{{ route('projects.edit', $project->id) }}"
-                   class="p-2 rounded-lg bg-white/60 hover:bg-white border" title="Edit Project">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM22.61 5.64c.39-.39.39-1.02 0-1.41l-2.83-2.83a.9959.9959 0 0 0-1.41 0L16.13 3.04l3.75 3.75 2.73-2.73z" />
-                  </svg>
-                </a>
+      <form method="POST" action="{{ route('projects.setCompletion', $project->id) }}" class="mr-2">
+        @csrf @method('PATCH')
+        <input type="hidden" name="meets" value="0">
+        <button class="px-3 py-1.5 text-xs rounded-full bg-[#7A1C1C] text-white hover:opacity-90">
+          Tidak Memenuhi
+        </button>
+      </form>
+    @endif
+  @endcan
 
-                {{-- HAPUS --}}
-                <form action="{{ route('projects.destroy', $project->id) }}" method="POST"
-                      onsubmit="return confirm('Yakin ingin menghapus project ini? Aksi ini tidak bisa dibatalkan.');">
-                  @csrf
-                  @method('DELETE')
-                  <button type="submit" class="p-2 rounded-lg bg-white/60 hover:bg-white border" title="Hapus Project">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M6 7h12v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm3-4h6l1 1h4v2H4V4h4l1-1z" />
-                    </svg>
-                  </button>
-                </form>
-              </div>
+  {{-- EDIT --}}
+  <a href="{{ route('projects.edit', $project->id) }}"
+     class="p-2 rounded-lg bg-white/60 hover:bg-white border" title="Edit Project">
+    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM22.61 5.64c.39-.39.39-1.02 0-1.41l-2.83-2.83a.9959.9959 0 0 0-1.41 0L16.13 3.04l3.75 3.75 2.73-2.73z" />
+    </svg>
+  </a>
+
+  {{-- HAPUS --}}
+  <form action="{{ route('projects.destroy', $project->id) }}" method="POST"
+        onsubmit="return confirm('Yakin ingin menghapus project ini? Aksi ini tidak bisa dibatalkan.');">
+    @csrf
+    @method('DELETE')
+    <button type="submit" class="p-2 rounded-lg bg-white/60 hover:bg-white border" title="Hapus Project">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M6 7h12v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm3-4h6l1 1h4v2H4V4h4l1-1z" />
+      </svg>
+    </button>
+  </form>
+</div>
+
             </div>
 
             {{-- TOMBOL TAMBAH PROGRESS (DI ATAS LIST) --}}

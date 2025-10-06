@@ -38,9 +38,7 @@
           </svg>
         </button>
         <div id="menuPanel" class="hidden absolute right-0 mt-2 w-48 rounded-xl shadow-lg bg-[#7A1C1C] text-white overflow-hidden">
-          <a href="{{ route('account.setting') }}" class="block px-4 py-3 hover:bg-[#6a1717]">
-            Pengaturan Akun
-          </a>
+          <a href="{{ route('account.setting') }}" class="block px-4 py-3 hover:bg-[#6a1717]">Pengaturan Akun</a>
           <a href="/logout" class="block px-4 py-3 hover:bg-[#6a1717]">Log Out</a>
         </div>
       </div>
@@ -56,33 +54,60 @@
     </div>
   </section>
 
-  {{-- SECTION HEADER --}}
+  {{-- SECTION HEADER + TOMBOL BUAT PROJECT (modal) --}}
   <header class="sticky top-0 z-30 bg-[#F3DCDC]/90 backdrop-blur border-b">
     <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
       <span class="font-semibold text-gray-700 text-lg">Project</span>
+
+      <div class="flex justify-end">
+        <button id="openNewProject" type="button"
+          class="inline-flex items-center gap-2 rounded-full border border-[#7A1C1C] bg-white hover:bg-[#FFF2F2] text-[#7A1C1C] font-medium h-[32px] px-3 text-sm shadow-sm">
+          <span class="grid place-items-center w-6 h-6 rounded-full bg-[#7A1C1C] text-white">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2h6z" />
+            </svg>
+          </span>
+          Buat Project
+        </button>
+      </div>
     </div>
   </header>
+
+  {{-- NOTIFIKASI --}}
+  <div class="max-w-6xl mx-auto px-5">
+    @if (session('success'))
+      <div class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">{{ session('success') }}</div>
+    @endif
+    @if (session('error'))
+      <div class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">{{ session('error') }}</div>
+    @endif
+    @if ($errors->any())
+      <div class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">
+        <div class="font-semibold mb-1">Terjadi kesalahan:</div>
+        <ul class="list-disc pl-5 space-y-1">
+          @foreach ($errors->all() as $error) <li>{{ $error }}</li> @endforeach
+        </ul>
+      </div>
+    @endif
+  </div>
 
   {{-- DAFTAR PROJECT --}}
   @if ($projects->isNotEmpty())
     <div class="max-w-6xl mx-auto px-5 mt-8 space-y-8">
       @foreach ($projects as $project)
         @php
-          // hitung cincin dari update terbaru per progress
+          // Ring progress: rata-rata progress terakhir per progress
           $latestPercents = [];
           foreach ($project->progresses as $pr) {
             $last = $pr->updates->sortByDesc('update_date')->first();
             $latestPercents[] = $last ? (int)($last->progress_percent ?? ($last->percent ?? 0)) : 0;
           }
-          $realization = count($latestPercents)
-            ? (int) round(array_sum($latestPercents) / max(count($latestPercents), 1))
-            : 0;
+          $realization = count($latestPercents) ? (int) round(array_sum($latestPercents) / max(count($latestPercents), 1)) : 0;
 
           $size=110; $stroke=12; $r=$size/2-$stroke; $circ=2*M_PI*$r; $off=$circ*(1-$realization/100);
 
-          // --- STATUS: "Menunggu Finalisasi" bila semua progress sudah met+confirmed namun project belum difinalisasi ---
+          // STATUS (termasuk "Menunggu Finalisasi") – finalisasi tetap hak DIG
           $finalized = !is_null($project->meets_requirement) || !is_null($project->completed_at);
-
           $progressCount = $project->progresses->count();
           $allConfirmedAndMet = $progressCount > 0 && $project->progresses->every(function($p) {
             $last = $p->updates->sortByDesc('update_date')->first();
@@ -94,16 +119,15 @@
             $statusText  = $project->meets_requirement ? 'Project Selesai, Memenuhi' : 'Project Selesai, Tidak Memenuhi';
             $statusColor = $project->meets_requirement ? '#166534' : '#7A1C1C';
           } elseif ($allConfirmedAndMet) {
-            // semua progress sudah memenuhi & dikonfirmasi, tinggal keputusan akhir
-            $statusText  = 'Menunggu Finalisasi';
+            $statusText  = 'Menunggu Finalisasi (DIG)';
             $statusColor = '#7A1C1C';
           } else {
             $statusText  = 'Dalam Proses';
             $statusColor = '#7A1C1C';
           }
 
-          // untuk hak edit progress: owner progress (IT) boleh edit/update sebelum dikonfirmasi
           $authId = (int) auth()->id();
+          $isProjectOwnerIT = (int)($project->created_by ?? 0) === $authId; // hanya pemilik yg bisa edit/hapus
         @endphp
 
         <div class="rounded-2xl border-2 border-[#7A1C1C] bg-[#F2DCDC] p-5">
@@ -140,8 +164,22 @@
               </div>
             </div>
 
-            {{-- BADGE STATUS --}}
-            <div class="flex items-start justify-end">
+            {{-- BADGE + AKSI OWNER --}}
+            <div class="flex items-start justify-end gap-2">
+              @if($isProjectOwnerIT)
+                <a href="{{ route('projects.edit', $project->id) }}"
+                   class="px-3 py-1 rounded-xl bg-white text-gray-800 text-xs shadow hover:bg-[#FFF2F2]">
+                  Edit Project
+                </a>
+                <form method="POST" action="{{ route('projects.destroy', $project->id) }}"
+                      onsubmit="return confirm('Yakin ingin menghapus project ini? Aksi ini tidak bisa dibatalkan.');">
+                  @csrf @method('DELETE')
+                  <button class="px-3 py-1 rounded-xl bg-white text-gray-800 text-xs shadow hover:bg-[#FFF2F2]">
+                    Hapus
+                  </button>
+                </form>
+              @endif
+
               <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
                     style="color: {{ $statusColor }}; background-color: {{ $finalized ? '#DCFCE7' : '#FEE2E2' }};">
                 {{ $statusText }}
@@ -157,16 +195,26 @@
                   $last      = $pr->updates->sortByDesc('update_date')->first();
                   $realisasi = $last ? (int)($last->percent ?? ($last->progress_percent ?? 0)) : 0;
 
-                  $isOwner          = (int)($pr->created_by ?? 0) === $authId;
+                  $isOwner          = (int)($pr->created_by ?? 0) === $authId;  // owner progress (bisa IT/DIG)
                   $alreadyConfirmed = !is_null($pr->confirmed_at);
+
+                  // Aturan IT: boleh update progress bila PEMILIK progress (IT) & belum dikonfirmasi
                   $canUpdate        = $isOwner && !$alreadyConfirmed;
+
+                  // Boleh konfirmasi selesai bila PEMILIK (IT) & realisasi >= target & belum dikonfirmasi
+                  $canConfirmBase   = $realisasi >= (int)$pr->desired_percent && !$alreadyConfirmed;
+                  $canConfirmIT     = $isOwner && $canConfirmBase;
+
+                  // (Opsional) izinkan konfirmasi juga bila sudah lewat timeline (meski < target) -> uncomment kalau mau
+                  $endDate   = $pr->end_date ? \Illuminate\Support\Carbon::parse($pr->end_date)->startOfDay() : null;
+                  $isOverdue = $endDate ? $endDate->lt(now()->startOfDay()) : false;
+                  // $canConfirmIT = $canConfirmIT || ($isOwner && $isOverdue && !$alreadyConfirmed);
                 @endphp
 
                 <div class="rounded-2xl bg-[#E6CACA] p-4">
                   <div class="flex items-start justify-between">
                     <div class="font-semibold">Progress {{ $loop->iteration }} — {{ $pr->name }}</div>
 
-                    {{-- Edit/Hapus hanya untuk owner dan sebelum dikonfirmasi --}}
                     @if ($isOwner)
                       <div class="flex gap-2">
                         <a href="{{ route('progresses.edit', $pr->id) }}"
@@ -186,7 +234,6 @@
                     @endif
                   </div>
 
-                  {{-- INFO --}}
                   <div class="mt-2 text-sm">
                     <div class="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1">
                       <span>Timeline Mulai</span>
@@ -208,8 +255,9 @@
                     </div>
                   </div>
 
-                  {{-- UPDATE (tanpa tombol Konfirmasi di IT) --}}
+                  {{-- UPDATE + KONFIRMASI (IT) --}}
                   <div class="mt-3">
+                    {{-- UPDATE --}}
                     <form method="POST" action="{{ route('progresses.updates.store', $pr->id) }}" class="flex flex-wrap gap-3 items-center">
                       @csrf
                       <input type="date" name="update_date" value="{{ now()->toDateString() }}"
@@ -222,11 +270,24 @@
                       </button>
                     </form>
 
-                    @if($alreadyConfirmed)
-                      <span class="inline-flex items-center rounded-full bg-green-100 text-green-700 px-3 py-1 text-xs font-semibold mt-2">
-                        Sudah dikonfirmasi
-                      </span>
-                    @endif
+                    {{-- KONFIRMASI SELESAI (IT OWNER) --}}
+                    <div class="mt-2">
+                      @if(!$alreadyConfirmed)
+                        <form method="POST" action="{{ route('progresses.confirm', $pr->id) }}">
+                          @csrf
+                          <button
+                            class="rounded-xl bg-green-700 text-white px-4 py-2 text-sm font-semibold disabled:opacity-50"
+                            {{ $canConfirmIT ? '' : 'disabled' }}
+                            title="{{ $isOwner ? 'Belum mencapai target' : 'Hanya pembuat progress (IT) yang dapat konfirmasi' }}">
+                            Konfirmasi Selesai
+                          </button>
+                        </form>
+                      @else
+                        <span class="inline-flex items-center rounded-full bg-green-100 text-green-700 px-3 py-1 text-xs font-semibold">
+                          Sudah dikonfirmasi
+                        </span>
+                      @endif
+                    </div>
                   </div>
 
                   @unless ($isOwner)
@@ -259,14 +320,262 @@
     </div>
   @endif
 
+  {{-- MODAL BUAT PROJECT (versi IT) --}}
+  <div id="newProjectModal" class="hidden fixed inset-0 z-40">
+    <div id="modalBackdrop" class="absolute inset-0 bg-black/40"></div>
+    <div class="relative max-w-4xl mx-auto my-10 bg-[#FFF5F5] rounded-2xl shadow-xl border border-[#E7C9C9] max-h-[90vh] flex flex-col overflow-hidden">
+      {{-- HEADER --}}
+      <div class="flex items-center justify-between px-6 py-4 bg-[#F6E4E4] border-b border-[#E7C9C9]">
+        <h3 class="text-lg font-semibold">Buat Project</h3>
+        <button id="closeNewProject" class="text-[#7A1C1C] text-2xl leading-none" type="button">&times;</button>
+      </div>
+
+      {{-- FORM --}}
+      <form method="POST" action="{{ route('projects.store') }}" class="flex-1 overflow-y-auto px-6 pt-5 pb-7 space-y-6">
+        @csrf
+
+        <section>
+          <h4 class="text-base font-semibold mb-2">Nama Project</h4>
+          <input name="name" required value="{{ old('name') }}"
+                 class="w-full rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] px-4 py-3 outline-none"
+                 placeholder="Tulis nama project..." />
+        </section>
+
+        {{-- PROGRESSES DINAMIS --}}
+        <section class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h4 class="text-base font-semibold">Daftar Progress</h4>
+            <button type="button" id="addProgressBtn"
+              class="inline-flex items-center gap-2 rounded-full border-2 border-[#7A1C1C] bg-white hover:bg-[#FFF2F2] text-[#7A1C1C] font-semibold h-[36px] px-3">
+              <span class="grid place-items-center w-6 h-6 rounded-full bg-[#7A1C1C] text-white leading-none">+</span>
+              Tambah Progress
+            </button>
+          </div>
+
+          <div id="progressList" class="space-y-4">
+            <div class="progress-row rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] p-4" data-index="0">
+              <div class="flex items-center justify-between mb-3">
+                <div class="font-semibold text-sm">Progress <span class="progress-number">1</span></div>
+                <button type="button" class="removeProgressBtn text-xs px-2 py-1 rounded-lg border border-red-300 text-red-700 hover:bg-red-50" disabled>Hapus</button>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="text-sm font-semibold mb-1 block">Nama Progress</label>
+                  <input name="progresses[0][name]" required value="{{ old('progresses.0.name') }}"
+                         class="w-full rounded-xl bg-white/80 border border-[#C89898] px-4 py-3 outline-none"
+                         placeholder="Nama Progress" />
+                </div>
+
+                <div>
+                  <label class="text-sm font-semibold mb-1 block">Timeline</label>
+                  <div class="grid grid-cols-2 gap-2">
+                    <input type="date" name="progresses[0][start_date]" required
+                           value="{{ old('progresses.0.start_date') }}"
+                           class="rounded-xl bg-white/80 border border-[#C89898] px-4 py-3 outline-none">
+                    <input type="date" name="progresses[0][end_date]" required
+                           value="{{ old('progresses.0.end_date') }}"
+                           class="rounded-xl bg-white/80 border border-[#C89898] px-4 py-3 outline-none">
+                  </div>
+                  <label class="block text-sm font-semibold mt-3 mb-1">Target (%)</label>
+                  <select name="progresses[0][desired_percent]" required
+                          class="w-full rounded-xl bg-white/80 border border-[#C89898] px-4 py-3 outline-none cursor-pointer">
+                    @for ($i = 0; $i <= 100; $i += 5)
+                      <option value="{{ $i }}" {{ (int) old('progresses.0.desired_percent', 75) === $i ? 'selected' : '' }}>
+                        {{ $i }}%
+                      </option>
+                    @endfor
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {{-- TEMPLATE ROW PROGRESS --}}
+        <template id="progressRowTemplate">
+          <div class="progress-row rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] p-4" data-index="__INDEX__">
+            <div class="flex items-center justify-between mb-3">
+              <div class="font-semibold text-sm">Progress <span class="progress-number">__NUMBER__</span></div>
+              <button type="button" class="removeProgressBtn text-xs px-2 py-1 rounded-lg border border-red-300 text-red-700 hover:bg-red-50">Hapus</button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="text-sm font-semibold mb-1 block">Nama Progress</label>
+                <input name="progresses[__INDEX__][name]" required
+                       class="w-full rounded-xl bg-white/80 border border-[#C89898] px-4 py-3 outline-none"
+                       placeholder="Nama Progress" />
+              </div>
+
+              <div>
+                <label class="text-sm font-semibold mb-1 block">Timeline</label>
+                <div class="grid grid-cols-2 gap-2">
+                  <input type="date" name="progresses[__INDEX__][start_date]" required
+                         class="rounded-xl bg-white/80 border border-[#C89898] px-4 py-3 outline-none">
+                  <input type="date" name="progresses[__INDEX__][end_date]" required
+                         class="rounded-xl bg-white/80 border border-[#C89898] px-4 py-3 outline-none">
+                </div>
+                <label class="block text-sm font-semibold mt-3 mb-1">Target (%)</label>
+                <select name="progresses[__INDEX__][desired_percent]" required
+                        class="w-full rounded-xl bg-white/80 border border-[#C89898] px-4 py-3 outline-none cursor-pointer">
+                  @for ($i = 0; $i <= 100; $i += 5)
+                    <option value="{{ $i }}">{{ $i }}%</option>
+                  @endfor
+                </select>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        {{-- PJ & Deskripsi --}}
+        @php $me = auth()->user(); @endphp
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="grid grid-cols-1 gap-5">
+            <div>
+              <h4 class="text-base font-semibold mb-2">Penanggung Jawab (Digital Banking)</h4>
+              <select name="digital_banking_id" required
+                      class="w-full rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] px-4 py-3 outline-none cursor-pointer">
+                <option value="">Pilih Nama</option>
+                <optgroup label="Semua User Digital Banking">
+                  @forelse(($digUsers ?? collect()) as $u)
+                    <option value="{{ $u->id }}" {{ (string)old('digital_banking_id','') === (string)$u->id ? 'selected' : '' }}>
+                      {{ $u->name }} {{ $u->username ? '(' . $u->username . ')' : '' }}
+                    </option>
+                  @empty
+                    <option value="" disabled>Belum ada user role Digital Banking</option>
+                  @endforelse
+                </optgroup>
+              </select>
+            </div>
+
+            <div>
+              <h4 class="text-base font-semibold mb-2">Penanggung Jawab (Developer / IT)</h4>
+              <select name="developer_id" required
+                      class="w-full rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] px-4 py-3 outline-none cursor-pointer">
+                <option value="">Pilih Nama</option>
+                {{-- Preselect diri sendiri (IT) --}}
+                <optgroup label="Saya">
+                  <option value="{{ $me->id }}" {{ (string)old('developer_id', $me->id) === (string)$me->id ? 'selected' : '' }}>
+                    {{ $me->name }} {{ $me->username ? '(' . $me->username . ')' : '' }}
+                  </option>
+                </optgroup>
+
+                <optgroup label="Semua User IT">
+                  @forelse(($itUsers ?? collect()) as $u)
+                    @continue((string)$u->id === (string)$me->id)
+                    <option value="{{ $u->id }}" {{ (string)old('developer_id', $me->id) === (string)$u->id ? 'selected' : '' }}>
+                      {{ $u->name }} {{ $u->username ? '(' . $u->username . ')' : '' }}
+                    </option>
+                  @empty
+                    <option value="" disabled>Belum ada user role IT</option>
+                  @endforelse
+                </optgroup>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <h4 class="text-base font-semibold mb-2">Deskripsi (Opsional)</h4>
+            <textarea name="description" rows="5"
+                      class="w-full rounded-xl bg-[#E2B9B9]/60 border border-[#C89898] px-4 py-3 outline-none"
+                      placeholder="Tuliskan deskripsi project...">{{ old('description') }}</textarea>
+          </div>
+        </section>
+
+        <div class="flex justify-end gap-3 pt-2">
+          <button type="button" id="cancelNewProject"
+                  class="w-[140px] h-[40px] rounded-full border-2 border-[#7A1C1C] bg-white text-[#7A1C1C] font-semibold">Batal</button>
+          <button type="submit"
+                  class="w-[140px] h-[40px] rounded-full border-2 border-[#7A1C1C] bg-[#E2B9B9] hover:bg-[#D9AFAF] text-black font-semibold">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   {{-- SCRIPTS --}}
   <script>
     // dropdown
     const menuBtn = document.getElementById('menuBtn');
     const menuPanel = document.getElementById('menuPanel');
-    menuBtn?.addEventListener('click', (e) => { e.stopPropagation(); menuPanel.classList.toggle('hidden'); });
-    menuPanel?.addEventListener('click', (e) => e.stopPropagation());
-    document.addEventListener('click', () => menuPanel?.classList.add('hidden'));
+    menuBtn?.addEventListener('click', () => menuPanel.classList.toggle('hidden'));
+    document.addEventListener('click', (e) => {
+      if (!menuBtn?.contains(e.target) && !menuPanel?.contains(e.target)) menuPanel?.classList.add('hidden');
+    });
+
+    // modal open/close
+    const modal = document.getElementById('newProjectModal');
+    const openNewProject = document.getElementById('openNewProject');
+    const closeNewProject = document.getElementById('closeNewProject');
+    const cancelNewProject = document.getElementById('cancelNewProject');
+    const backdrop = document.getElementById('modalBackdrop');
+    const openModal = () => modal.classList.remove('hidden');
+    const closeModal = () => modal.classList.add('hidden');
+    openNewProject?.addEventListener('click', openModal);
+    closeNewProject?.addEventListener('click', closeModal);
+    cancelNewProject?.addEventListener('click', closeModal);
+    backdrop?.addEventListener('click', closeModal);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+    // progress rows (dinamis)
+    (function() {
+      const list = document.getElementById('progressList');
+      const addBtn = document.getElementById('addProgressBtn');
+      const tpl = document.getElementById('progressRowTemplate');
+      if (!list || !addBtn || !tpl) return;
+
+      const renumber = () => {
+        const rows = list.querySelectorAll('.progress-row');
+        rows.forEach((row, i) => {
+          row.querySelector('.progress-number').textContent = i + 1;
+          const removeBtn = row.querySelector('.removeProgressBtn');
+          if (removeBtn) removeBtn.disabled = rows.length <= 1;
+        });
+      };
+
+      const reindexNames = () => {
+        const rows = list.querySelectorAll('.progress-row');
+        rows.forEach((row, idx) => {
+          row.dataset.index = idx;
+          row.querySelectorAll('input[name], select[name]').forEach(el => {
+            el.name = el.name.replace(/progresses\[\d+\]/, `progresses[${idx}]`);
+          });
+        });
+      };
+
+      const addRow = () => {
+        const currentIndex = list.querySelectorAll('.progress-row').length;
+        const html = tpl.innerHTML
+          .replaceAll('__INDEX__', currentIndex)
+          .replaceAll('__NUMBER__', currentIndex + 1);
+        const container = document.createElement('div');
+        container.innerHTML = html.trim();
+        const row = container.firstElementChild;
+
+        row.querySelector('.removeProgressBtn').addEventListener('click', () => {
+          row.remove();
+          renumber();
+          reindexNames();
+        });
+
+        list.appendChild(row);
+        renumber();
+      };
+
+      addBtn.addEventListener('click', addRow);
+
+      const firstRemove = list.querySelector('.removeProgressBtn');
+      if (firstRemove) {
+        firstRemove.addEventListener('click', (e) => {
+          const rows = list.querySelectorAll('.progress-row');
+          if (rows.length > 1) {
+            e.currentTarget.closest('.progress-row').remove();
+            renumber();
+            reindexNames();
+          }
+        });
+      }
+    })();
   </script>
 </body>
 </html>

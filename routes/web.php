@@ -21,6 +21,9 @@ use App\Http\Controllers\SupervisorController;
 use App\Http\Controllers\SupervisorNotificationController;
 use App\Http\Controllers\ArsipController;
 use App\Http\Controllers\AccountController;
+// routes/web.php
+use App\Http\Controllers\It\DashboardController as ItDashboard;
+
 
 Route::prefix('supervisor')
     ->name('supervisor.')
@@ -318,4 +321,20 @@ Route::middleware(['auth'])->group(function () {
     // Simpan perubahan
     Route::put('/account/settings', [AccountController::class, 'update'])
         ->name('account.update');
+});
+
+
+
+Route::middleware('auth')->group(function () {
+    // IT
+    Route::get('it/dashboard', [ItDashboard::class, 'index'])->name('it.dashboard');
+
+
+    // Project (CRUD, finalisasi, dll.)
+    Route::resource('projects', ProjectController::class)->except(['show']);
+    Route::patch('projects/{project}/completion', [ProjectController::class, 'setCompletion'])
+        ->name('projects.setCompletion');
+
+    // Halaman “Semua Progress”
+    Route::get('progresses', [ProjectController::class, 'progresses'])->name('semua.progresses');
 });

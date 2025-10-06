@@ -100,18 +100,38 @@
   </header>
 
   <main class="max-w-6xl mx-auto px-5 py-6">
-    {{-- FILTER TAB --}}
+    {{-- FILTER TAB + TOMBOL TUGAS SAYA --}}
     @php
       $q = request('status','all'); // all|in_progress|done
+      $mine = request('mine','0');  // '1' untuk aktif
+      $mineActive = $mine === '1';
+
+      // Helper styling
       $tab = fn($v) => $q===$v ? 'bg-[#7A1C1C] text-white' : 'bg-white text-[#7A1C1C] hover:bg-[#FFF2F2]';
+      $mineBtnClass = $mineActive ? 'bg-[#7A1C1C] text-white' : 'bg-white text-[#7A1C1C] hover:bg-[#FFF2F2]';
+
+      // Helper untuk membangun URL dengan status & mine konsisten
+      $buildUrl = function (string $status, bool $toggleMine = false) use ($mineActive) {
+          $params = ['status' => $status];
+          $params['mine'] = $toggleMine ? ($mineActive ? null : 1) : ($mineActive ? 1 : null);
+          // array_filter agar null tidak ikut jadi query
+          return route('semua.progresses', array_filter($params, fn($v)=>!is_null($v)));
+      };
     @endphp
-    <div class="flex gap-3">
-      <a href="{{ route('semua.progresses',['status'=>'all']) }}"
+
+    <div class="flex flex-wrap gap-3 items-center">
+      <a href="{{ $buildUrl('all') }}"
          class="rounded-[12px] h-9 px-5 text-sm font-semibold border-2 border-[#7A1C1C] {{ $tab('all') }} grid place-items-center">Semua</a>
-      <a href="{{ route('semua.progresses',['status'=>'in_progress']) }}"
+      <a href="{{ $buildUrl('in_progress') }}"
          class="rounded-[12px] h-9 px-5 text-sm font-semibold border-2 border-[#7A1C1C] {{ $tab('in_progress') }} grid place-items-center">Dalam Proses</a>
-      <a href="{{ route('semua.progresses',['status'=>'done']) }}"
+      <a href="{{ $buildUrl('done') }}"
          class="rounded-[12px] h-9 px-5 text-sm font-semibold border-2 border-[#7A1C1C] {{ $tab('done') }} grid place-items-center">Telah Selesai</a>
+
+      {{-- Tombol Tugas Saya --}}
+      <a href="{{ $buildUrl($q, true) }}"
+         class="ml-auto rounded-[12px] h-9 px-5 text-sm font-semibold border-2 border-[#7A1C1C] {{ $mineBtnClass }} grid place-items-center">
+        Tugas Saya
+      </a>
     </div>
 
     {{-- NOTIF --}}
@@ -128,36 +148,55 @@
     @endif
 
     {{-- LIST PROJECT --}}
+    @php $hasAny = false; @endphp
     @forelse ($projects as $project)
       @php
         // ==== FILTER TAB ====
-        // A. Final (sudah diputuskan Memenuhi/Tidak Memenuhi atau completed_at terisi)
         $finalized = !is_null($project->meets_requirement) || !is_null($project->completed_at);
-
-        // B. Semua progress sudah dikonfirmasi & mencapai target (proyek "selesai secara progress")
         $progressCount = $project->progresses->count();
         $allConfirmedAndMet = $progressCount > 0 && $project->progresses->every(function($p) {
           $last  = $p->updates->sortByDesc('update_date')->first();
           $real  = $last ? (int)($last->percent ?? $last->progress_percent ?? 0) : 0;
           return !is_null($p->confirmed_at) && $real >= (int)$p->desired_percent;
         });
-
-        // Telah Selesai = FINALIZED atau ALL CONFIRMED & MET
         $done = $finalized || $allConfirmedAndMet;
-
-        // Dalam Proses = selain Done
         $isInProgress = !$done;
+        $tabFilter = $q;
 
-        $tabFilter = request('status','all');
+        if($tabFilter === 'in_progress' && !$isInProgress) { $skipByTab = true; } else { $skipByTab = false; }
+        if($tabFilter === 'done' && !$done) { $skipByTab = true; }
       @endphp
 
-      @if($tabFilter === 'in_progress' && !$isInProgress)
-        @continue
-      @endif
-      @if($tabFilter === 'done' && !$done)
-        @continue
-      @endif
-      {{-- ==== END FILTER TAB ==== --}}
+      @if(!empty($skipByTab) && $skipByTab) @continue @endif
+
+      @php
+        // ==== FILTER "TUGAS SAYA" ====
+        $currentId = (int) auth()->id();
+
+        // Cek via ID PJ
+        $mineById = ((int)($project->digital_banking_id ?? 0) === $currentId)
+                 || ((int)($project->developer_id ?? 0) === $currentId);
+
+        // Fallback cek nama (jika sewaktu-waktu ID tak terisi pada relasi eager)
+        $mineByName = false;
+        if(!$mineById) {
+          $meName = trim((string)($user?->name ?? ''));
+          $dbName = trim((string)($project->digitalBanking->name ?? ''));
+          $itName = trim((string)($project->developer->name ?? ''));
+          $mineByName = $meName !== '' && ($meName === $dbName || $meName === $itName);
+        }
+
+        $isMine = $mineById || $mineByName;
+
+        if ($mineActive && !$isMine) {
+          $skipByMine = true;
+        } else {
+          $skipByMine = false;
+        }
+      @endphp
+
+      @if(!empty($skipByMine) && $skipByMine) @continue @endif
+      @php $hasAny = true; @endphp
 
       @php
         // Cincin: rata-rata realisasi dari update terbaru tiap progress
@@ -171,10 +210,6 @@
             : 0;
         $size=88; $stroke=10; $r=$size/2-$stroke; $circ=2*M_PI*$r; $off=$circ*(1-$realization/100);
 
-        // Badge status:
-        // - Jika final -> "Project Selesai, Memenuhi/Tidak Memenuhi"
-        // - Jika semua progress selesai tapi belum final -> "Menunggu Finalisasi"
-        // - Lainnya -> "Dalam Proses"
         if ($finalized) {
           $statusText  = $project->meets_requirement ? 'Project Selesai, Memenuhi' : 'Project Selesai, Tidak Memenuhi';
           $statusColor = $project->meets_requirement ? '#166534' : '#7A1C1C';
@@ -197,7 +232,7 @@
                 return $all && is_null($project->meets_requirement);
              })();
 
-        // Tambahan aturan: ready because overdue-unmet (selaras dashboard)
+        // Tambahan aturan: ready because overdue-unmet
         $hasOverdueUnmet = false;
         $othersAllConfirmed = true;
 
@@ -545,6 +580,17 @@
         </div>
       </div>
     @endforelse
+
+    {{-- Kosong karena filter "Tugas Saya" --}}
+    @if(!$hasAny)
+      <div class="mt-6">
+        <div class="bg-[#EBD0D0] rounded-2xl px-6 py-8 flex items-center justify-center">
+          <div class="rounded-2xl bg-[#CFA8A8] px-5 py-3 text-white/95">
+            Tidak ada project untuk “Tugas Saya” pada filter ini.
+          </div>
+        </div>
+      </div>
+    @endif
   </main>
 
   <script>

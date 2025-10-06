@@ -19,11 +19,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // kosongkan saja – JANGAN panggil registerPolicies di sini
     }
-    // app/Providers/AuthServiceProvider.php
-protected $policies = [
-    \App\Models\Progress::class => \App\Policies\ProgressPolicy::class,
-];
-
 }
